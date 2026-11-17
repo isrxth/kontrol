@@ -12,7 +12,7 @@ export const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get('/api/health', async (_req, res, next) => {
+app.get(['/api', '/api/health'], async (_req, res, next) => {
   try {
     await pool.query('SELECT 1');
     res.json({ status: 'ok', db: 'connected' });
@@ -31,10 +31,13 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'not found' });
 });
 
-app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const message = err instanceof Error ? err.message : 'Internal server error';
-  console.error('[server error]', message);
-  res.status(500).json({ error: message });
+  console.error('[server error]', err);
+  res.status(500).json({
+    error: message,
+    code: err?.code,
+  });
 });
 
 export default app;
