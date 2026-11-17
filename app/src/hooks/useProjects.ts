@@ -60,16 +60,13 @@ export function useProjects() {
   );
 
   const createProject = useCallback(
-    (input: NewProjectInput) => {
-      void runAction(() => api.createProject(input));
-    },
+    (input: NewProjectInput) => runAction(() => api.createProject(input)),
     [runAction],
   );
 
   const updateProject = useCallback(
-    (id: string, input: Partial<NewProjectInput>) => {
-      void runAction(() => api.updateProject(id, input));
-    },
+    (id: string, input: Partial<NewProjectInput>) =>
+      runAction(() => api.updateProject(id, input)),
     [runAction],
   );
 

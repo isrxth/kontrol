@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { PROJECT_COLUMNS } from './vault';
 import type { NewProjectInput, Project, ProjectKind, ProjectStatus } from '@/lib/api';
@@ -54,9 +55,16 @@ export function ProjectFormModal({ courses, initial, busy, onClose, onSave }: Pr
     if (ok) onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-white/15 bg-slate-900/90 p-6 space-y-4">
+  const content = (
+    <div
+      className="fixed inset-0 z-[100] flex flex-col justify-end sm:justify-center items-center bg-black/70 backdrop-blur-sm p-0 sm:p-4 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md max-h-[90dvh] sm:max-h-[85vh] overflow-y-auto rounded-t-[28px] rounded-b-none sm:rounded-3xl border border-b-0 sm:border-b border-white/15 bg-slate-900/95 p-5 sm:p-6 space-y-4 shadow-2xl mb-0 sm:my-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-1 sm:hidden" />
         <div className="flex items-start justify-between">
           <div>
             <h3 className="text-xl font-bold text-white">{initial ? 'Edit Project' : 'New Project'}</h3>
@@ -183,4 +191,6 @@ export function ProjectFormModal({ courses, initial, busy, onClose, onSave }: Pr
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(content, document.body) : content;
 }

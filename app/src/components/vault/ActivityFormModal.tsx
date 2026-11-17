@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import type { Activity, ActivityPriority, ActivityType, NewActivityInput } from '@/lib/api';
+import { GlassDateTimePicker } from './GlassDateTimePicker';
 
 interface ActivityFormModalProps {
   courses: { id: string; code: string; name: string }[];
@@ -43,9 +45,16 @@ export function ActivityFormModal({ courses, initial, busy, onClose, onSave }: A
     if (ok) onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-white/15 bg-slate-900/90 p-6 space-y-4">
+  const content = (
+    <div
+      className="fixed inset-0 z-[100] flex flex-col justify-end sm:justify-center items-center bg-black/70 backdrop-blur-sm p-0 sm:p-4 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md max-h-[90dvh] sm:max-h-[85vh] overflow-y-auto rounded-t-[28px] rounded-b-none sm:rounded-3xl border border-b-0 sm:border-b border-white/15 bg-slate-900/95 p-5 sm:p-6 space-y-4 shadow-2xl mb-0 sm:my-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-1 sm:hidden" />
         <div className="flex items-start justify-between">
           <div>
             <h3 className="text-xl font-bold text-white">{initial ? 'Edit Activity' : 'New Activity'}</h3>
@@ -85,26 +94,12 @@ export function ActivityFormModal({ courses, initial, busy, onClose, onSave }: A
           ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <label className="space-y-1">
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Due date</span>
-            <input
-              type="date"
-              value={form.dueDate}
-              onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none focus:border-indigo-400/60 [color-scheme:dark]"
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Time (optional)</span>
-            <input
-              type="time"
-              value={form.dueTime}
-              onChange={(e) => setForm({ ...form, dueTime: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none focus:border-indigo-400/60 [color-scheme:dark]"
-            />
-          </label>
-        </div>
+        <GlassDateTimePicker
+          date={form.dueDate}
+          time={form.dueTime}
+          onDateChange={(dueDate) => setForm({ ...form, dueDate })}
+          onTimeChange={(dueTime) => setForm({ ...form, dueTime })}
+        />
 
         <div className="space-y-1.5">
           <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Priority</span>
@@ -171,4 +166,6 @@ export function ActivityFormModal({ courses, initial, busy, onClose, onSave }: A
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(content, document.body) : content;
 }

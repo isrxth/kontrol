@@ -14,7 +14,7 @@ import { TimetableBoard } from '@/components/timetable/TimetableBoard';
 import { BuildVault } from '@/components/vault/BuildVault';
 import { bucketOf } from '@/components/vault/vault';
 import type { CourseStats, TodaySlot } from '@/lib/api';
-import { ShieldCheck, Settings, CheckCircle, AlertTriangle, ShieldAlert, Plus, X, Zap, Clock, BookOpen, CalendarCheck } from 'lucide-react';
+import { ShieldCheck, Settings, CheckCircle, AlertTriangle, ShieldAlert, Plus, X, Zap, Clock, BookOpen, CalendarCheck, LayoutDashboard, Calendar, FolderGit2, Bell } from 'lucide-react';
 
 function nextLectureSlot(today: TodaySlot[]): TodaySlot | null {
   if (today.length === 0) return null;
@@ -40,10 +40,10 @@ export default function App() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const navigationTabs = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'timetable', label: 'Timetable', count: courses.length },
-    { id: 'projects', label: 'Build Vault' },
-    { id: 'notifications', label: 'Priority Hub' },
+    { id: 'overview', label: 'Overview', shortLabel: 'Overview', icon: LayoutDashboard },
+    { id: 'timetable', label: 'Timetable', shortLabel: 'Timetable', icon: Calendar, count: courses.length },
+    { id: 'projects', label: 'Build Vault', shortLabel: 'Vault', icon: FolderGit2 },
+    { id: 'notifications', label: 'Priority Hub', shortLabel: 'Priority', icon: Bell },
   ];
 
   const handleAddCourse = async () => {
@@ -120,16 +120,30 @@ export default function App() {
           {/* Active Tab Header Bar */}
           <div className="flex justify-between items-center pb-6 border-b border-white/10">
             <div>
-              <h2 className="text-2xl font-black text-white tracking-tight capitalize">
-                {activeTab} Dashboard
+              <h2 className="text-2xl font-black text-white tracking-tight">
+                {activeTab === 'projects'
+                  ? 'Build Vault'
+                  : activeTab === 'timetable'
+                    ? 'Timetable'
+                    : activeTab === 'notifications'
+                      ? 'Priority Hub'
+                      : 'Overview Dashboard'}
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                University Attendance Eligibility & Risk Analysis
+                {activeTab === 'projects'
+                  ? 'Track builds, projects & academic deadlines'
+                  : activeTab === 'timetable'
+                    ? 'Weekly schedule & attendance logging'
+                    : activeTab === 'notifications'
+                      ? 'Alerts, reminders & priorities'
+                      : 'University Attendance Eligibility & Risk Analysis'}
               </p>
             </div>
-            <GlassButton variant="primary" size="sm" onClick={() => setShowAddModal(true)}>
-              <Plus size={16} className="mr-2" /> Add Module
-            </GlassButton>
+            {(activeTab === 'overview' || activeTab === 'timetable') && (
+              <GlassButton variant="primary" size="sm" onClick={() => setShowAddModal(true)}>
+                <Plus size={16} className="mr-2" /> Add Module
+              </GlassButton>
+            )}
           </div>
 
           {/* Bento Grid Content */}
@@ -277,9 +291,9 @@ export default function App() {
             <BuildVault projectsCtrl={projectsCtrl} activitiesCtrl={activitiesCtrl} courses={courses} />
           )}
 
-          {activeTab !== 'overview' && activeTab !== 'timetable' && (
+          {activeTab === 'notifications' && (
             <GlassPanel className="p-12 text-center border-white/15 bg-slate-900/40">
-              <h3 className="text-xl font-bold text-white capitalize">{activeTab} View</h3>
+              <h3 className="text-xl font-bold text-white">Priority Hub</h3>
               <p className="text-slate-400 text-sm mt-2">Section content initializing for Stage 1.</p>
             </GlassPanel>
           )}
@@ -287,24 +301,33 @@ export default function App() {
       </main>
 
       {/* 4. Floating Bottom Glass Navigation */}
-      <nav className="fixed bottom-6 inset-x-0 z-50 flex justify-center pointer-events-none px-4">
-        <div className="pointer-events-auto shadow-2xl">
+      <nav className="fixed bottom-3 sm:bottom-6 inset-x-0 z-50 flex justify-center pointer-events-none px-2 sm:px-4 pb-[env(safe-area-inset-bottom,0px)]">
+        <div className="w-full max-w-[440px] sm:w-auto sm:max-w-none pointer-events-auto shadow-2xl">
           <GlassTabs
             value={activeTab}
             onValueChange={setActiveTab}
             orientation="horizontal"
           >
-            <GlassTabsList>
-              {navigationTabs.map((tab) => (
-                <GlassTabsTrigger key={tab.id} value={tab.id}>
-                  {tab.label}
-                  {tab.count !== undefined && (
-                    <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded-full bg-white/10">
-                      {tab.count}
-                    </span>
-                  )}
-                </GlassTabsTrigger>
-              ))}
+            <GlassTabsList className="w-full sm:w-auto p-1 gap-0.5 sm:gap-1">
+              {navigationTabs.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <GlassTabsTrigger
+                    key={tab.id}
+                    value={tab.id}
+                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-1.5 sm:px-3.5 sm:py-2 text-[11px] sm:text-xs font-semibold whitespace-nowrap transition-all"
+                  >
+                    <Icon size={14} className="shrink-0 opacity-80" />
+                    <span className="hidden sm:inline">{tab.label}</span>
+                    <span className="inline sm:hidden">{tab.shortLabel}</span>
+                    {tab.count !== undefined && (
+                      <span className="ml-0.5 sm:ml-1 px-1.5 py-0.2 text-[9px] rounded-full bg-white/10 font-mono">
+                        {tab.count}
+                      </span>
+                    )}
+                  </GlassTabsTrigger>
+                );
+              })}
             </GlassTabsList>
           </GlassTabs>
         </div>
@@ -312,8 +335,15 @@ export default function App() {
 
       {/* 5. Add Module Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <GlassPanel className="w-full max-w-md p-6 space-y-5 border-white/15 bg-slate-900/60 relative">
+        <div
+          className="fixed inset-0 z-[100] flex flex-col justify-end sm:justify-center items-center bg-black/70 backdrop-blur-sm p-0 sm:p-4 overflow-y-auto"
+          onClick={() => { setShowAddModal(false); setFormError(null); }}
+        >
+          <GlassPanel
+            className="w-full max-w-md max-h-[90dvh] sm:max-h-[85vh] overflow-y-auto rounded-t-[28px] rounded-b-none sm:rounded-3xl border-b-0 sm:border-b p-5 sm:p-6 space-y-5 border-white/15 bg-slate-900/95 relative shadow-2xl mb-0 sm:my-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-1 sm:hidden" />
             <div className="flex justify-between items-center">
               <div>
                 <h3 className="text-xl font-bold text-white">Add Module</h3>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ExternalLink, GitBranch, Plus, X } from 'lucide-react';
 import { PROJECT_COLUMNS } from './vault';
 import type { Project, ProjectStatus, ProjectTask } from '@/lib/api';
@@ -70,7 +71,7 @@ export function ProjectDetailPanel({
 
   const doneCount = tasks.filter((t) => t.isDone).length;
 
-  return (
+  const content = (
     <div className="fixed inset-0 z-[100] flex justify-end bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <aside
         className="h-full w-full max-w-md bg-slate-950/90 border-l border-white/10 shadow-2xl overflow-y-auto p-6 space-y-5"
@@ -235,4 +236,6 @@ export function ProjectDetailPanel({
       </aside>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(content, document.body) : content;
 }
