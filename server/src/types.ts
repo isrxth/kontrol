@@ -43,14 +43,28 @@ export interface TimetableSlotRow {
   day_of_week: number;
   start_time: string;
   end_time: string;
-  venue: string;
+  venue: string | null;
   is_cancelled: boolean;
+}
+
+export interface TimetableSlotDetailRow extends TimetableSlotRow {
+  course_code: string;
+  course_name: string;
+}
+
+export interface TimetableSwapRow {
+  id: string;
+  week_start: string;
+  slot_a: string;
+  slot_b: string;
+  created_at: string;
 }
 
 export interface AttendanceLogRow {
   id: string;
   course_id: string;
   log_date: string;
+  slot_time: string | null;
   status: 'ATTENDED' | 'SKIPPED' | 'CANCELLED';
   reason: string | null;
   created_at: string;

@@ -7,12 +7,26 @@ import { GlassPanel } from '@/components/glassyui/glass-panel';
 import { GlassButton } from '@/components/glassyui/glass-button';
 import { GlassInput } from '@/components/glassyui/glass-input';
 import { useCourses } from '@/hooks/useCourses';
-import type { CourseStats } from '@/lib/api';
+import { useTimetable } from '@/hooks/useTimetable';
+import { TimetableBoard } from '@/components/timetable/TimetableBoard';
+import type { CourseStats, TodaySlot } from '@/lib/api';
 import { ShieldCheck, Settings, CheckCircle, AlertTriangle, ShieldAlert, Plus, X, Zap, Clock, BookOpen } from 'lucide-react';
+
+function nextLectureSlot(today: TodaySlot[]): TodaySlot | null {
+  if (today.length === 0) return null;
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const toMinutes = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    return (h ?? 0) * 60 + (m ?? 0);
+  };
+  return today.find((s) => !s.isCancelled && toMinutes(s.startTime) > nowMinutes) ?? null;
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('overview');
-  const { courses, loading, error, logAttendance, addCourse } = useCourses();
+  const { courses, loading, error, refetch, logAttendance, addCourse } = useCourses();
+  const timetable = useTimetable(courses, { onAttendanceLogged: refetch });
   const [showAddModal, setShowAddModal] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -167,13 +181,26 @@ export default function App() {
                   <span className="text-xs font-mono text-slate-400">TIMETABLE</span>
                   <Clock size={18} className="text-indigo-400" />
                 </div>
-                <div className="my-4">
-                  <p className="text-xs text-slate-400">Next Lecture</p>
-                  <p className="text-lg font-bold text-white mt-1">Software Architecture</p>
-                  <p className="text-xs text-slate-400">08:00 AM • Lab 02</p>
-                </div>
+                {(() => {
+                  const next = nextLectureSlot(timetable.today);
+                  return (
+                    <div className="my-4">
+                      <p className="text-xs text-slate-400">Next Lecture</p>
+                      {next ? (
+                        <>
+                          <p className="text-lg font-bold text-white mt-1 truncate">{next.course.name}</p>
+                          <p className="text-xs text-slate-400">
+                            {next.startTime} {next.venue ? `• ${next.venue}` : ''}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-sm text-slate-500 mt-1">No more classes today</p>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div className="w-full bg-indigo-500/20 text-indigo-300 text-xs text-center py-2 rounded-xl border border-indigo-500/30 font-semibold">
-                  In 45 minutes
+                  Open Timetable
                 </div>
               </GlassPanel>
 
@@ -202,8 +229,10 @@ export default function App() {
             )
           )}
 
-          {/* Tab Placeholder Views */}
-          {activeTab !== 'overview' && (
+          {/* Tab Views */}
+          {activeTab === 'timetable' && <TimetableBoard timetable={timetable} />}
+
+          {activeTab !== 'overview' && activeTab !== 'timetable' && (
             <GlassPanel className="p-12 text-center border-white/15 bg-slate-900/40">
               <h3 className="text-xl font-bold text-white capitalize">{activeTab} View</h3>
               <p className="text-slate-400 text-sm mt-2">Section content initializing for Stage 1.</p>
