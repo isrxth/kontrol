@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { Pool } from 'pg';
+import { Client, Pool } from 'pg';
 
 const rawUrl = process.env.DATABASE_URL || '';
 
@@ -14,34 +14,51 @@ const useSsl =
   process.env.NODE_ENV === 'production' ||
   Boolean(process.env.VERCEL);
 
+const sslConfig = useSsl ? { rejectUnauthorized: false } : undefined;
+
+// Keep pool export for /api/health or legacy imports, capped to 1 short-lived socket
 export const pool = new Pool({
   connectionString,
-  ssl: useSsl ? { rejectUnauthorized: false } : undefined,
-  max: 1, // 1 connection per serverless Lambda (prevents 15-client saturation)
-  idleTimeoutMillis: 100, // Release socket to Supabase 100ms after query finishes
+  ssl: sslConfig,
+  max: 1,
+  idleTimeoutMillis: 100,
   allowExitOnIdle: true,
-  connectionTimeoutMillis: 10000,
+  connectionTimeoutMillis: 15000,
 });
 
 export async function query<T>(text: string, params?: unknown[]): Promise<T[]> {
-  const maxRetries = 3;
+  const maxRetries = 5;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const client = new Client({
+      connectionString,
+      ssl: sslConfig,
+      connectionTimeoutMillis: 15000,
+    });
+
     try {
-      const result = await pool.query(text, params);
+      await client.connect();
+      const result = await client.query(text, params);
       return result.rows as T[];
     } catch (err: any) {
-      const isPoolFull =
+      const msg = typeof err?.message === 'string' ? err.message : '';
+      const isTransient =
+        err?.code === 'XX000' ||
         err?.code === 'EMAXCONNSESSION' ||
-        (typeof err?.message === 'string' && err.message.includes('max clients reached'));
+        msg.includes('EMAXCONNSESSION') ||
+        msg.includes('max clients reached') ||
+        msg.includes('timeout exceeded');
 
-      if (isPoolFull && attempt < maxRetries) {
-        // Wait 150ms -> 300ms -> 450ms for another Lambda's 100ms idle socket to close
-        await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
+      if (isTransient && attempt < maxRetries) {
+        // Jittered backoff (200ms - 1000ms) so parallel Promise.all calls stagger cleanly
+        const delay = 200 * (attempt + 1) + Math.floor(Math.random() * 150);
+        await new Promise((resolve) => setTimeout(resolve, delay));
         continue;
       }
 
       throw err;
+    } finally {
+      await client.end().catch(() => { });
     }
   }
 

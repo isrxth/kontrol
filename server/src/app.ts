@@ -6,6 +6,7 @@ import timetableRouter from './routes/timetable.js';
 import projectsRouter from './routes/projects.js';
 import activitiesRouter from './routes/activities.js';
 import { pool } from './db.js';
+import { query } from './db.js';
 
 export const app = express();
 
@@ -14,12 +15,12 @@ app.use(express.json());
 
 app.get(['/api', '/api/health'], async (_req, res, next) => {
   try {
-    await pool.query('SELECT 1');
+    await query('SELECT 1');
     res.json({ status: 'ok', db: 'connected' });
   } catch (err) {
     next(err);
   }
-});
+})
 
 app.use('/api/courses', coursesRouter);
 app.use('/api/courses', logsRouter);
