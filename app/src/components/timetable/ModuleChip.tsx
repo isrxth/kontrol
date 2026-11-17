@@ -24,12 +24,12 @@ export function ModuleChip({ slot, course, isCancelled, isToday, logStatus, onOp
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={`relative h-full rounded-2xl border p-3 pr-9 text-left transition-all cursor-grab active:cursor-grabbing select-none ${
+      className={`relative h-full rounded-2xl border p-3 pr-9 text-left transition-all cursor-grab active:cursor-grabbing select-none outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 ${
         isDragging ? 'opacity-30' : ''
       } ${
         isCancelled
-          ? 'border-rose-500/30 bg-rose-950/30'
-          : 'border-white/15 bg-slate-800/60 hover:bg-slate-700/50'
+          ? 'border-rose-500/30 bg-rose-950/40'
+          : 'border-white/15 bg-slate-900/70 hover:bg-slate-800/60'
       }`}
     >
       <div className={`flex items-start justify-between gap-2 ${isCancelled ? 'opacity-60 line-through' : ''}`}>
@@ -55,7 +55,7 @@ export function ModuleChip({ slot, course, isCancelled, isToday, logStatus, onOp
           onOpenMenu();
         }}
         aria-label="Cell options"
-        className={`absolute top-2 right-2 rounded-lg p-1 text-slate-400 hover:text-white hover:bg-white/10 transition-all ${
+        className={`absolute top-2 right-2 rounded-lg p-1 text-slate-400 hover:text-white hover:bg-white/10 transition-all outline-none focus-visible:ring-2 focus-visible:ring-white/40 ${
           menuOpen ? 'text-white bg-white/10' : ''
         }`}
       >

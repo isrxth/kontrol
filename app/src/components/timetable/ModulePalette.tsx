@@ -6,14 +6,22 @@ import { dragIdForCourse } from '@/lib/timetable';
 interface ModulePaletteProps {
   courses: CourseStats[];
   dragActive: boolean;
+  /** Mobile layout: full width, chips wrap into rows. */
+  compact?: boolean;
 }
 
 /** Kanban-style sidebar of modules that are not placed anywhere on the grid. */
-export function ModulePalette({ courses, dragActive }: ModulePaletteProps) {
+export function ModulePalette({ courses, dragActive, compact = false }: ModulePaletteProps) {
   const { setNodeRef, isOver } = useDroppable({ id: 'palette' });
 
   return (
-    <GlassPanelWrapper>
+    <div
+      className={
+        compact
+          ? 'flex flex-col rounded-3xl border border-white/10 bg-slate-900/40 p-3'
+          : 'flex w-60 shrink-0 flex-col rounded-3xl border border-white/10 bg-slate-900/40 p-4'
+      }
+    >
       <div className="flex items-center gap-2 px-1 pb-3">
         <Layers size={14} className="text-indigo-300" />
         <h3 className="text-xs font-bold text-white tracking-wide">Modules</h3>
@@ -24,40 +32,34 @@ export function ModulePalette({ courses, dragActive }: ModulePaletteProps) {
 
       <div
         ref={setNodeRef}
-        className={`flex-1 min-h-40 space-y-2 rounded-2xl border border-dashed p-1.5 transition-all ${
-          isOver && dragActive
-            ? 'border-rose-400/60 bg-rose-500/10'
-            : 'border-white/10 bg-white/[0.02]'
-        }`}
+        className={`rounded-2xl border border-dashed p-1.5 transition-all ${
+          compact ? 'min-h-14' : 'min-h-40 flex-1 space-y-2'
+        } ${isOver && dragActive ? 'border-rose-400/60 bg-rose-500/10' : 'border-white/10 bg-white/[0.02]'}`}
       >
         {isOver && dragActive && (
           <div className="flex items-center justify-center gap-1.5 py-2 text-[10px] font-semibold text-rose-300">
             <Undo2 size={12} /> Drop to remove from timetable
           </div>
         )}
-        {courses.length === 0 && !dragActive && (
-          <p className="px-2 py-6 text-center text-[10px] text-slate-500">
-            All modules are placed.
-            <br />
-            Drag a module here to unassign it.
-          </p>
-        )}
-        {courses.map((course) => (
-          <PaletteChip key={course.id} course={course} />
-        ))}
+        <div className={compact ? 'flex flex-wrap gap-2' : 'space-y-2'}>
+          {courses.length === 0 && !dragActive && (
+            <p className="w-full px-2 py-6 text-center text-[10px] text-slate-500">
+              All modules are placed.
+              <br />
+              Drag a module here to unassign it.
+            </p>
+          )}
+          {courses.map((course) => (
+            <PaletteChip key={course.id} course={course} />
+          ))}
+        </div>
       </div>
 
-      <p className="px-1 pt-3 text-[10px] leading-relaxed text-slate-500">
-        Drag into a slot to schedule. Drag onto another module to swap for this week.
-      </p>
-    </GlassPanelWrapper>
-  );
-}
-
-function GlassPanelWrapper({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex w-60 shrink-0 flex-col rounded-3xl border border-white/10 bg-slate-900/40 p-4">
-      {children}
+      {!compact && (
+        <p className="px-1 pt-3 text-[10px] leading-relaxed text-slate-500">
+          Drag into a slot to schedule. Drag onto another module to swap for this week.
+        </p>
+      )}
     </div>
   );
 }
@@ -72,7 +74,7 @@ function PaletteChip({ course }: { course: CourseStats }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={`flex cursor-grab items-center gap-2 rounded-2xl border border-white/10 bg-slate-800/60 px-2.5 py-2 transition-all hover:bg-slate-700/60 active:cursor-grabbing select-none ${
+      className={`flex cursor-grab items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/70 px-2.5 py-2 transition-all hover:bg-slate-800/60 active:cursor-grabbing select-none outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 ${
         isDragging ? 'opacity-30' : ''
       }`}
     >

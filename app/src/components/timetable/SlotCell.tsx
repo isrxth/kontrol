@@ -43,7 +43,7 @@ export function SlotCell({
   return (
     <div
       ref={setNodeRef}
-      className={`relative h-28 rounded-2xl border transition-all duration-150 ${
+      className={`relative h-24 md:h-28 rounded-2xl border transition-all duration-150 ${
         dropHighlight
           ? 'border-indigo-400/70 bg-indigo-500/15 ring-1 ring-indigo-400/50'
           : cell.slot

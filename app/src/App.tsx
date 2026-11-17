@@ -109,7 +109,7 @@ export default function App() {
         <GlassSurface
           preset="subtle"
           lens
-          className="w-full max-w-6xl mx-auto p-6 md:p-8 rounded-3xl border border-white/10 shadow-2xl relative space-y-6"
+          className="w-full max-w-6xl mx-auto p-6 md:p-8 rounded-3xl border border-white/10 shadow-2xl relative space-y-6 bg-slate-950/55"
         >
           {/* Active Tab Header Bar */}
           <div className="flex justify-between items-center pb-6 border-b border-white/10">

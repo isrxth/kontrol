@@ -153,3 +153,25 @@ html {
     @apply font-sans;
   }
 }
+
+/* Keyboard-only focus rings for the dock tabs. Radix triggers are focused
+   programmatically on pointer-down, so Chromium matches :focus-visible for
+   mouse/touch clicks too; the html[data-input] tracker in main.tsx lets us
+   keep the ring for real keyboard navigation only. */
+html[data-input='pointer'] .lg-tabs-trigger:focus-visible {
+  outline: none;
+}
+
+/* Dock: roomier triggers — bigger touch targets, labels breathe. Scoped with
+   nav to out-specificity the glassyui .lg-tabs-trigger base styles. */
+nav .lg-tabs-trigger {
+  padding: 0.65rem 1.25rem;
+  min-width: 5.5rem;
+}
+
+@media (min-width: 768px) {
+  nav .lg-tabs-trigger {
+    padding: 0.7rem 1.6rem;
+    min-width: 7rem;
+  }
+}

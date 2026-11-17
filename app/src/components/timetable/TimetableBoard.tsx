@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   DndContext,
@@ -15,6 +15,7 @@ import { timetableSlots, noonBreak } from '@/lib/api';
 import {
   buildGrid,
   DAY_LABELS,
+  DAY_SHORT_LABELS,
   dayOfWeekOf,
   mondayOf,
   parseCellDroppableId,
@@ -35,6 +36,21 @@ interface DragPreview {
   name: string;
 }
 
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(
+    () => window.matchMedia('(min-width: 768px)').matches,
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const onChange = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  return isDesktop;
+}
+
 export function TimetableBoard({ timetable }: TimetableBoardProps) {
   const {
     courses, slots, swapMap, today, loading, error, actionError, clearActionError, busy,
@@ -48,6 +64,7 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
 
   const todayDow = dayOfWeekOf(new Date());
   const isSchoolDay = todayDow <= 5;
+  const isDesktop = useIsDesktop();
   const grid = useMemo(() => buildGrid(slots, swapMap), [slots, swapMap]);
   const paletteCourses = useMemo(() => unplacedCourses(courses, slots, swapMap), [courses, slots, swapMap]);
   const todayStatusMap = useMemo(() => {
@@ -155,6 +172,28 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
 
   const weekStart = mondayOf(new Date());
 
+  const handlers = {
+    onLog: (cell: GridCell, status: 'ATTENDED' | 'SKIPPED' | 'CANCELLED') => {
+      const course = cell.cell?.course;
+      if (course) void logForCell(course.id, cell.slotIndex, status);
+    },
+    onToggleCancelClass: (cell: GridCell) => {
+      if (cell.cell) void toggleCancelled(cell.cell.slot.id, !cell.cell.slot.isCancelled);
+    },
+    onEditVenue: (cell: GridCell) => {
+      if (cell.cell) {
+        setVenueEdit({
+          slotId: cell.cell.slot.id,
+          code: cell.cell.course.code,
+          venue: cell.cell.slot.venue ?? '',
+        });
+      }
+    },
+    onRemove: (cell: GridCell) => {
+      if (cell.cell) void unassign(cell.cell.slot.id);
+    },
+  };
+
   return (
     <DndContext
       sensors={sensors}
@@ -191,64 +230,59 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
           </div>
         )}
 
-        <div className="flex gap-4">
-          <ModulePalette courses={paletteCourses} dragActive={Boolean(dragPreview)} />
+        {isDesktop ? (
+          <div className="flex gap-4">
+            <ModulePalette courses={paletteCourses} dragActive={Boolean(dragPreview)} />
 
-          {/* Grid: time column + 5 day columns */}
-          <div
-            className="grid min-w-0 flex-1 gap-2"
-            style={{ gridTemplateColumns: '92px repeat(5, minmax(0, 1fr))' }}
-          >
-            {/* Header row */}
-            <div />
-            {DAY_LABELS.map((label, i) => (
-              <div
-                key={label}
-                className={`pb-1 text-center text-xs font-bold tracking-wide ${
-                  isSchoolDay && todayDow === i + 1 ? 'text-indigo-300' : 'text-slate-400'
-                }`}
-              >
-                {label}
-                {isSchoolDay && todayDow === i + 1 && (
-                  <span className="ml-1 rounded-full bg-indigo-500/20 px-1.5 py-0.5 text-[9px] font-semibold">Today</span>
-                )}
-              </div>
-            ))}
+            {/* Grid: time column + 5 day columns */}
+            <div
+              className="grid min-w-0 flex-1 gap-2"
+              style={{ gridTemplateColumns: '92px repeat(5, minmax(0, 1fr))' }}
+            >
+              {/* Header row */}
+              <div />
+              {DAY_LABELS.map((label, i) => (
+                <div
+                  key={label}
+                  className={`pb-1 text-center text-xs font-bold tracking-wide ${
+                    isSchoolDay && todayDow === i + 1 ? 'text-indigo-300' : 'text-slate-400'
+                  }`}
+                >
+                  {label}
+                  {isSchoolDay && todayDow === i + 1 && (
+                    <span className="ml-1 rounded-full bg-indigo-500/20 px-1.5 py-0.5 text-[9px] font-semibold">Today</span>
+                  )}
+                </div>
+              ))}
 
-            {/* Slot rows, with the noon break between slots 2 and 3 */}
-            {timetableSlots.map((def, defIndex) => (
-              <SlotRowGroup
-                key={def.index}
-                defIndex={defIndex}
-                cells={grid[defIndex]}
-                todayDow={isSchoolDay ? todayDow : -1}
-                todayStatusMap={todayStatusMap}
-                openMenu={openMenu}
-                setOpenMenu={setOpenMenu}
-                dragActive={Boolean(dragPreview)}
-                onLog={(cell, status) => {
-                  const course = cell.cell?.course;
-                  if (course) void logForCell(course.id, cell.slotIndex, status);
-                }}
-                onToggleCancelClass={(cell) => {
-                  if (cell.cell) void toggleCancelled(cell.cell.slot.id, !cell.cell.slot.isCancelled);
-                }}
-                onEditVenue={(cell) => {
-                  if (cell.cell) {
-                    setVenueEdit({
-                      slotId: cell.cell.slot.id,
-                      code: cell.cell.course.code,
-                      venue: cell.cell.slot.venue ?? '',
-                    });
-                  }
-                }}
-                onRemove={(cell) => {
-                  if (cell.cell) void unassign(cell.cell.slot.id);
-                }}
-              />
-            ))}
+              {/* Slot rows, with the noon break between slots 2 and 3 */}
+              {timetableSlots.map((def, defIndex) => (
+                <SlotRowGroup
+                  key={def.index}
+                  defIndex={defIndex}
+                  cells={grid[defIndex]}
+                  todayDow={isSchoolDay ? todayDow : -1}
+                  todayStatusMap={todayStatusMap}
+                  openMenu={openMenu}
+                  setOpenMenu={setOpenMenu}
+                  dragActive={Boolean(dragPreview)}
+                  handlers={handlers}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <MobileBoard
+            grid={grid}
+            paletteCourses={paletteCourses}
+            dragActive={Boolean(dragPreview)}
+            todayDow={isSchoolDay ? todayDow : -1}
+            todayStatusMap={todayStatusMap}
+            openMenu={openMenu}
+            setOpenMenu={setOpenMenu}
+            handlers={handlers}
+          />
+        )}
       </div>
 
       {createPortal(
@@ -279,6 +313,13 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
   );
 }
 
+interface CellHandlers {
+  onLog: (cell: GridCell, status: 'ATTENDED' | 'SKIPPED' | 'CANCELLED') => void;
+  onToggleCancelClass: (cell: GridCell) => void;
+  onEditVenue: (cell: GridCell) => void;
+  onRemove: (cell: GridCell) => void;
+}
+
 interface SlotRowGroupProps {
   defIndex: number;
   cells: GridCell[];
@@ -287,10 +328,7 @@ interface SlotRowGroupProps {
   openMenu: string | null;
   setOpenMenu: (id: string | null) => void;
   dragActive: boolean;
-  onLog: (cell: GridCell, status: 'ATTENDED' | 'SKIPPED' | 'CANCELLED') => void;
-  onToggleCancelClass: (cell: GridCell) => void;
-  onEditVenue: (cell: GridCell) => void;
-  onRemove: (cell: GridCell) => void;
+  handlers: CellHandlers;
 }
 
 function SlotRowGroup({
@@ -301,10 +339,7 @@ function SlotRowGroup({
   openMenu,
   setOpenMenu,
   dragActive,
-  onLog,
-  onToggleCancelClass,
-  onEditVenue,
-  onRemove,
+  handlers,
 }: SlotRowGroupProps) {
   const def = timetableSlots[defIndex];
   const breakBefore = defIndex === 2;
@@ -339,10 +374,10 @@ function SlotRowGroup({
             menuOpen={openMenu === menuId}
             onToggleMenu={() => setOpenMenu(openMenu === menuId ? null : menuId)}
             onCloseMenu={() => setOpenMenu(null)}
-            onLog={(status) => onLog(cell, status)}
-            onToggleCancelClass={() => onToggleCancelClass(cell)}
-            onEditVenue={() => onEditVenue(cell)}
-            onRemove={() => onRemove(cell)}
+            onLog={(status) => handlers.onLog(cell, status)}
+            onToggleCancelClass={() => handlers.onToggleCancelClass(cell)}
+            onEditVenue={() => handlers.onEditVenue(cell)}
+            onRemove={() => handlers.onRemove(cell)}
           />
         );
       })}
@@ -403,5 +438,127 @@ function VenueEditModal({
         </div>
       </div>
     </div>
+  );
+}
+
+interface MobileBoardProps {
+  grid: GridCell[][];
+  paletteCourses: TimetableController['courses'];
+  dragActive: boolean;
+  todayDow: number;
+  todayStatusMap: Map<string, 'ATTENDED' | 'SKIPPED' | 'CANCELLED'>;
+  openMenu: string | null;
+  setOpenMenu: (id: string | null) => void;
+  handlers: CellHandlers;
+}
+
+/** <768px: days stack vertically, palette wraps on top. Drag works across all days. */
+function MobileBoard({
+  grid,
+  paletteCourses,
+  dragActive,
+  todayDow,
+  todayStatusMap,
+  openMenu,
+  setOpenMenu,
+  handlers,
+}: MobileBoardProps) {
+  return (
+    <div className="space-y-3">
+      <ModulePalette courses={paletteCourses} dragActive={dragActive} compact />
+
+      {DAY_SHORT_LABELS.map((label, dayIndex) => {
+        const day = dayIndex + 1;
+        const isToday = day === todayDow;
+        return (
+          <div key={day} className="rounded-2xl border border-white/10 bg-white/[0.02] p-2">
+            <div className="flex items-center justify-between px-1 pb-2">
+              <span className={`text-xs font-bold tracking-wide ${isToday ? 'text-indigo-300' : 'text-slate-300'}`}>
+                {label}
+                {isToday && (
+                  <span className="ml-1.5 rounded-full bg-indigo-500/20 px-1.5 py-0.5 text-[9px] font-semibold">Today</span>
+                )}
+              </span>
+              <span className="font-mono text-[10px] text-slate-500">{DAY_LABELS[dayIndex]}</span>
+            </div>
+
+            <div className="space-y-2">
+              {grid.map((slotRow, defIndex) => (
+                <MobileSlotRow
+                  key={slotRow[0]?.slotIndex ?? defIndex}
+                  defIndex={defIndex}
+                  cell={slotRow[dayIndex]}
+                  isToday={isToday}
+                  todayStatusMap={todayStatusMap}
+                  openMenu={openMenu}
+                  setOpenMenu={setOpenMenu}
+                  dragActive={dragActive}
+                  handlers={handlers}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+interface MobileSlotRowProps {
+  defIndex: number;
+  cell: GridCell;
+  isToday: boolean;
+  todayStatusMap: Map<string, 'ATTENDED' | 'SKIPPED' | 'CANCELLED'>;
+  openMenu: string | null;
+  setOpenMenu: (id: string | null) => void;
+  dragActive: boolean;
+  handlers: CellHandlers;
+}
+
+function MobileSlotRow({
+  defIndex,
+  cell,
+  isToday,
+  todayStatusMap,
+  openMenu,
+  setOpenMenu,
+  dragActive,
+  handlers,
+}: MobileSlotRowProps) {
+  const def = timetableSlots[defIndex];
+  const menuId = `${cell.dayOfWeek}:${cell.slotIndex}`;
+
+  return (
+    <>
+      {defIndex === 2 && (
+        <div className="flex items-center gap-2 rounded-xl border border-white/5 bg-white/[0.02] px-3 py-1">
+          <span className="font-mono text-[9px] text-slate-500">
+            {noonBreak.startTime} - {noonBreak.endTime}
+          </span>
+          <span className="text-[9px] font-semibold uppercase tracking-widest text-slate-500">Noon Break</span>
+        </div>
+      )}
+      <div className="flex items-stretch gap-2">
+        <div className="flex w-11 shrink-0 flex-col justify-center text-right">
+          <span className="font-mono text-[10px] text-slate-400">{def.startTime}</span>
+          <span className="font-mono text-[9px] text-slate-600">{def.endTime}</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <SlotCell
+            cell={cell}
+            isToday={isToday}
+            logStatus={todayStatusMap.get(`${cell.dayOfWeek}:${cell.startTime}`) ?? null}
+            dragActive={dragActive}
+            menuOpen={openMenu === menuId}
+            onToggleMenu={() => setOpenMenu(openMenu === menuId ? null : menuId)}
+            onCloseMenu={() => setOpenMenu(null)}
+            onLog={(status) => handlers.onLog(cell, status)}
+            onToggleCancelClass={() => handlers.onToggleCancelClass(cell)}
+            onEditVenue={() => handlers.onEditVenue(cell)}
+            onRemove={() => handlers.onRemove(cell)}
+          />
+        </div>
+      </div>
+    </>
   );
 }
