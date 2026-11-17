@@ -3,6 +3,8 @@ import cors from 'cors';
 import coursesRouter from './routes/courses.js';
 import logsRouter from './routes/logs.js';
 import timetableRouter from './routes/timetable.js';
+import projectsRouter from './routes/projects.js';
+import activitiesRouter from './routes/activities.js';
 import { pool } from './db.js';
 
 const app = express();
@@ -23,6 +25,8 @@ app.get('/api/health', async (_req, res, next) => {
 app.use('/api/courses', coursesRouter);
 app.use('/api/courses', logsRouter);
 app.use('/api/timetable', timetableRouter);
+app.use('/api/projects', projectsRouter);
+app.use('/api/activities', activitiesRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: 'not found' });

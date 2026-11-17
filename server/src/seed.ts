@@ -1,10 +1,18 @@
 import 'dotenv/config';
 import { pool } from './db.js';
+import { SLOTS } from './slots.js';
 
 const COURSES = [
   { code: 'ITM 2101', name: 'Database Systems', totalLectures: 30, requiredRatio: 0.8, credits: 3 },
   { code: 'ITM 2102', name: 'Software Architecture', totalLectures: 24, requiredRatio: 0.8, credits: 3 },
   { code: 'ITM 2103', name: 'Data Structures', totalLectures: 36, requiredRatio: 0.8, credits: 3 },
+];
+
+// One distinct cell per course so the seeded board is readable: Mon/S1, Tue/S2, Wed/S3.
+const SEED_CELLS = [
+  { day: 1, slotIndex: 1, venue: 'Room 101' },
+  { day: 2, slotIndex: 2, venue: 'Lab 204' },
+  { day: 3, slotIndex: 3, venue: 'Room 305' },
 ];
 
 async function seed() {
@@ -25,12 +33,12 @@ async function seed() {
       );
 
       if (existing.rowCount === 0) {
-        const dayA = (index * 2) % 7 + 1;
-        const dayB = (index * 2 + 1) % 7 + 1;
+        const cell = SEED_CELLS[index] ?? { day: (index % 5) + 1, slotIndex: 1, venue: null };
+        const slotDef = SLOTS[cell.slotIndex - 1] ?? SLOTS[0];
         await pool.query(
           `INSERT INTO timetable_slots (course_id, day_of_week, start_time, end_time, venue)
-           VALUES ($1, $2, $3, $4, $5), ($1, $6, $7, $8, $9)`,
-          [courseId, dayA, '09:00', '10:30', 'Lab 0' + (index + 1), dayB, '08:00', '09:30', 'Room 1' + (index + 1)],
+           VALUES ($1, $2, $3, $4, $5)`,
+          [courseId, cell.day, slotDef.startTime, slotDef.endTime, cell.venue],
         );
       }
       console.log(`seeded ${c.code} (${courseId})`);
