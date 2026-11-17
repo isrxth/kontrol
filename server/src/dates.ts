@@ -33,3 +33,11 @@ export function dateOnly(value: Date | string): string {
   if (typeof value === 'string') return value.slice(0, 10);
   return toDateOnly(value);
 }
+
+/** True when 'YYYY-MM-DD' is a real calendar date (rejects e.g. 2026-02-30). */
+export function isValidDateOnly(value: string): boolean {
+  const [y, m, d] = value.split('-').map(Number);
+  if (!y || !m || !d) return false;
+  const date = new Date(y, m - 1, d);
+  return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
+}

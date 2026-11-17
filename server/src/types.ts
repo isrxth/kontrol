@@ -69,3 +69,58 @@ export interface AttendanceLogRow {
   reason: string | null;
   created_at: string;
 }
+
+export type ProjectStatus = 'IDEA' | 'BUILDING' | 'SHIPPED' | 'PAUSED';
+export type ProjectKind = 'PERSONAL' | 'COURSEWORK';
+
+export interface ProjectRow {
+  id: string;
+  title: string;
+  kind: ProjectKind;
+  course_id: string | null;
+  status: ProjectStatus;
+  description: string | null;
+  repo_url: string | null;
+  live_url: string | null;
+  tech_stack: string[] | null;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectDetailRow extends ProjectRow {
+  course_code: string | null;
+  done_task_count: number;
+  total_task_count: number;
+}
+
+export interface ProjectTaskRow {
+  id: string;
+  project_id: string;
+  title: string;
+  is_done: boolean;
+  position: number;
+  created_at: string;
+}
+
+export type ActivityType = 'EXAM' | 'COURSEWORK' | 'EVENT' | 'OTHER';
+export type ActivityPriority = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface ActivityRow {
+  id: string;
+  title: string;
+  type: ActivityType;
+  course_id: string | null;
+  due_date: string | null;
+  due_time: string | null;
+  priority: ActivityPriority;
+  notes: string | null;
+  is_done: boolean;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ActivityDetailRow extends ActivityRow {
+  course_code: string | null;
+}

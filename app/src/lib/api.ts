@@ -83,6 +83,76 @@ export interface NewCourseInput {
 
 export type LogStatus = 'ATTENDED' | 'SKIPPED' | 'CANCELLED';
 
+export type ProjectStatus = 'IDEA' | 'BUILDING' | 'SHIPPED' | 'PAUSED';
+export type ProjectKind = 'PERSONAL' | 'COURSEWORK';
+
+export interface Project {
+  id: string;
+  title: string;
+  kind: ProjectKind;
+  courseId: string | null;
+  courseCode: string | null;
+  status: ProjectStatus;
+  description: string | null;
+  repoUrl: string | null;
+  liveUrl: string | null;
+  techStack: string[];
+  position: number;
+  doneTaskCount: number;
+  totalTaskCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectTask {
+  id: string;
+  projectId: string;
+  title: string;
+  isDone: boolean;
+  position: number;
+  createdAt: string;
+}
+
+export interface NewProjectInput {
+  title: string;
+  kind: ProjectKind;
+  courseId?: string | null;
+  status?: ProjectStatus;
+  description?: string | null;
+  repoUrl?: string | null;
+  liveUrl?: string | null;
+  techStack?: string[] | null;
+}
+
+export type ActivityType = 'EXAM' | 'COURSEWORK' | 'EVENT' | 'OTHER';
+export type ActivityPriority = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface Activity {
+  id: string;
+  title: string;
+  type: ActivityType;
+  courseId: string | null;
+  courseCode: string | null;
+  dueDate: string | null;
+  dueTime: string | null;
+  priority: ActivityPriority;
+  notes: string | null;
+  isDone: boolean;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NewActivityInput {
+  title: string;
+  type: ActivityType;
+  courseId?: string | null;
+  dueDate?: string | null;
+  dueTime?: string | null;
+  priority?: ActivityPriority;
+  notes?: string | null;
+}
+
 const BASE = '/api';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -158,6 +228,54 @@ export const api = {
 
   getToday: (date?: string) =>
     request<TodaySlot[]>(`/timetable/today${date ? `?date=${encodeURIComponent(date)}` : ''}`),
+
+  // --- Build Vault: projects ---
+  getProjects: () => request<Project[]>('/projects'),
+
+  createProject: (input: NewProjectInput) =>
+    request<Project>('/projects', { method: 'POST', body: JSON.stringify(input) }),
+
+  updateProject: (id: string, input: Partial<NewProjectInput>) =>
+    request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
+
+  reorderProjects: (status: ProjectStatus, orderedIds: string[]) =>
+    request<{ reordered: number }>('/projects/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ status, orderedIds }),
+    }),
+
+  deleteProject: (id: string) =>
+    request<void>(`/projects/${id}`, { method: 'DELETE' }),
+
+  getProjectTasks: (projectId: string) =>
+    request<ProjectTask[]>(`/projects/${projectId}/tasks`),
+
+  addProjectTask: (projectId: string, title: string) =>
+    request<ProjectTask>(`/projects/${projectId}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify({ title }),
+    }),
+
+  updateProjectTask: (taskId: string, input: { title?: string; isDone?: boolean }) =>
+    request<ProjectTask>(`/projects/tasks/${taskId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+
+  deleteProjectTask: (taskId: string) =>
+    request<void>(`/projects/tasks/${taskId}`, { method: 'DELETE' }),
+
+  // --- Work planner: activities ---
+  getActivities: () => request<Activity[]>('/activities'),
+
+  createActivity: (input: NewActivityInput) =>
+    request<Activity>('/activities', { method: 'POST', body: JSON.stringify(input) }),
+
+  updateActivity: (id: string, input: Partial<NewActivityInput> & { isDone?: boolean }) =>
+    request<Activity>(`/activities/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
+
+  deleteActivity: (id: string) =>
+    request<void>(`/activities/${id}`, { method: 'DELETE' }),
 };
 
 // Fixed class periods, mirroring server/src/slots.ts

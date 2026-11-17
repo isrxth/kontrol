@@ -8,9 +8,13 @@ import { GlassButton } from '@/components/glassyui/glass-button';
 import { GlassInput } from '@/components/glassyui/glass-input';
 import { useCourses } from '@/hooks/useCourses';
 import { useTimetable } from '@/hooks/useTimetable';
+import { useProjects } from '@/hooks/useProjects';
+import { useActivities } from '@/hooks/useActivities';
 import { TimetableBoard } from '@/components/timetable/TimetableBoard';
+import { BuildVault } from '@/components/vault/BuildVault';
+import { bucketOf } from '@/components/vault/vault';
 import type { CourseStats, TodaySlot } from '@/lib/api';
-import { ShieldCheck, Settings, CheckCircle, AlertTriangle, ShieldAlert, Plus, X, Zap, Clock, BookOpen } from 'lucide-react';
+import { ShieldCheck, Settings, CheckCircle, AlertTriangle, ShieldAlert, Plus, X, Zap, Clock, BookOpen, CalendarCheck } from 'lucide-react';
 
 function nextLectureSlot(today: TodaySlot[]): TodaySlot | null {
   if (today.length === 0) return null;
@@ -27,6 +31,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('overview');
   const { courses, loading, error, refetch, logAttendance, addCourse } = useCourses();
   const timetable = useTimetable(courses, { onAttendanceLogged: refetch });
+  const projectsCtrl = useProjects();
+  const activitiesCtrl = useActivities();
   const [showAddModal, setShowAddModal] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -204,6 +210,41 @@ export default function App() {
                 </div>
               </GlassPanel>
 
+              {/* Bento Item 3: Work Planner */}
+              {(() => {
+                const today = new Date();
+                const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                const overdue = activitiesCtrl.activities.filter((a) => bucketOf(a, todayKey) === 'OVERDUE').length;
+                const dueToday = activitiesCtrl.activities.filter((a) => bucketOf(a, todayKey) === 'TODAY' && !a.isDone).length;
+                const next = activitiesCtrl.activities.find((a) => bucketOf(a, todayKey) === 'UPCOMING');
+                return (
+                  <GlassPanel
+                    className="p-6 flex flex-col justify-between border-white/15 bg-slate-900/40 cursor-pointer hover:border-white/25 transition-all"
+                    onClick={() => setActiveTab('projects')}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-mono text-slate-400">WORK PLANNER</span>
+                      <CalendarCheck size={18} className="text-amber-300" />
+                    </div>
+                    <div className="my-4 flex items-end gap-4">
+                      <div>
+                        <p className="text-4xl font-extrabold text-rose-400">{overdue}</p>
+                        <p className="text-xs text-slate-400 mt-1">Overdue</p>
+                      </div>
+                      <div>
+                        <p className="text-4xl font-extrabold text-indigo-300">{dueToday}</p>
+                        <p className="text-xs text-slate-400 mt-1">Due today</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-500 truncate">
+                      {next
+                        ? `Next: ${next.title} · ${next.dueDate}`
+                        : 'No upcoming activities — add some in Build Vault'}
+                    </p>
+                  </GlassPanel>
+                );
+              })()}
+
               {/* Bento Item 3: Overall Summary */}
               <GlassPanel className="p-6 flex flex-col justify-between border-white/15 bg-slate-900/40">
                 <div className="flex justify-between items-center">
@@ -231,6 +272,10 @@ export default function App() {
 
           {/* Tab Views */}
           {activeTab === 'timetable' && <TimetableBoard timetable={timetable} />}
+
+          {activeTab === 'projects' && (
+            <BuildVault projectsCtrl={projectsCtrl} activitiesCtrl={activitiesCtrl} courses={courses} />
+          )}
 
           {activeTab !== 'overview' && activeTab !== 'timetable' && (
             <GlassPanel className="p-12 text-center border-white/15 bg-slate-900/40">
