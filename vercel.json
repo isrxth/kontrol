@@ -3,25 +3,13 @@
   "services": {
     "app": {
       "root": "app",
-      "framework": "vite"
+      "framework": "vite",
+      "routePrefix": "/"
     },
     "server": {
       "root": "server",
-      "framework": "express"
+      "framework": "express",
+      "routePrefix": "/api"
     }
-  },
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": {
-        "service": "server"
-      }
-    },
-    {
-      "source": "/:path*",
-      "destination": {
-        "service": "app"
-      }
-    }
-  ]
+  }
 }
