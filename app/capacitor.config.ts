@@ -5,7 +5,13 @@ const config: CapacitorConfig = {
   appName: 'Kontrol',
   webDir: 'dist',
   server: {
-    cleartext: true,
+    androidScheme: 'https',
+  },
+  plugins: {
+    SystemBars: {
+      insetsHandling: 'disable',
+      style: 'DARK',
+    },
   },
 };
 
