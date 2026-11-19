@@ -74,11 +74,14 @@ function PaletteChip({ course }: { course: CourseStats }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={`flex cursor-grab items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/70 px-2.5 py-2 transition-all hover:bg-slate-800/60 active:cursor-grabbing select-none outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 ${
+      onContextMenu={(e) => e.preventDefault()}
+      className={`draggable-item flex cursor-grab items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/70 px-2.5 py-2 transition-all hover:bg-slate-800/60 active:cursor-grabbing select-none outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 ${
         isDragging ? 'opacity-30' : ''
       }`}
     >
-      <GripVertical size={12} className="shrink-0 text-slate-500" />
+      <span className="drag-handle touch-none p-1 -m-1 flex items-center justify-center">
+        <GripVertical size={14} className="shrink-0 text-slate-500" />
+      </span>
       <div className="min-w-0">
         <span className="text-[10px] font-mono font-semibold text-indigo-300">{course.code}</span>
         <p className="text-xs font-bold text-white truncate leading-tight">{course.name}</p>

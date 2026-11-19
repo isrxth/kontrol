@@ -10,8 +10,10 @@ import { useCourses } from '@/hooks/useCourses';
 import { useTimetable } from '@/hooks/useTimetable';
 import { useProjects } from '@/hooks/useProjects';
 import { useActivities } from '@/hooks/useActivities';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { TimetableBoard } from '@/components/timetable/TimetableBoard';
 import { BuildVault } from '@/components/vault/BuildVault';
+import { MobileShell } from '@/components/mobile/MobileShell';
 import { bucketOf } from '@/components/vault/vault';
 import type { CourseStats, TodaySlot } from '@/lib/api';
 import { ShieldCheck, Settings, CheckCircle, AlertTriangle, ShieldAlert, Plus, X, Zap, Clock, BookOpen, CalendarCheck, LayoutDashboard, Calendar, FolderGit2, Bell } from 'lucide-react';
@@ -36,8 +38,27 @@ export default function App() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const isMobile = useIsMobile();
+
   const [form, setForm] = useState({ code: '', name: '', totalLectures: '', requiredPercent: '80' });
   const [formError, setFormError] = useState<string | null>(null);
+
+  // ── Mobile shell ─────────────────────────────────────────────────────────────
+  if (isMobile) {
+    return (
+      <MobileShell
+        courses={courses}
+        loading={loading}
+        error={error}
+        timetable={timetable}
+        projectsCtrl={projectsCtrl}
+        activitiesCtrl={activitiesCtrl}
+        logAttendance={logAttendance}
+        addCourse={addCourse}
+      />
+    );
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const navigationTabs = [
     { id: 'overview', label: 'Overview', shortLabel: 'Overview', icon: LayoutDashboard },
@@ -184,14 +205,22 @@ export default function App() {
                 <div className="mt-8 flex items-baseline justify-between">
                   <div>
                     <p className="text-xs text-slate-400">Safe Skips Available</p>
-                    <p className="text-5xl font-black text-emerald-400 mt-1">
+                    <p className="text-5xl font-black text-emerald-400 mt-1 tabular-nums">
                       {courses[0].remainingSkips}
                       <span className="text-sm font-normal text-slate-400 ml-2">skips left</span>
                     </p>
+                    <p className="text-[10px] text-slate-500 tabular-nums mt-1">
+                      {courses[0].attendedCount} attended · {courses[0].skippedCount} skipped
+                    </p>
                   </div>
-                  <GlassButton onClick={() => logAttendance(courses[0].id, 'SKIPPED')} size="sm">
-                    + Log Skip
-                  </GlassButton>
+                  <div className="flex flex-col gap-2">
+                    <GlassButton onClick={() => logAttendance(courses[0].id, 'ATTENDED')} size="sm" variant="primary">
+                      <CheckCircle size={13} className="mr-1.5" /> Attended
+                    </GlassButton>
+                    <GlassButton onClick={() => logAttendance(courses[0].id, 'SKIPPED')} size="sm">
+                      + Log Skip
+                    </GlassButton>
+                  </div>
                 </div>
               </GlassPanel>
 
@@ -278,7 +307,12 @@ export default function App() {
 
               {/* Bento Items 4+: Course Cards */}
               {courses.slice(1).map((course) => (
-                <CourseCard key={course.id} course={course} onSkip={() => logAttendance(course.id, 'SKIPPED')} />
+                <CourseCard
+                  key={course.id}
+                  course={course}
+                  onSkip={() => logAttendance(course.id, 'SKIPPED')}
+                  onAttended={() => logAttendance(course.id, 'ATTENDED')}
+                />
               ))}
               </div>
             )
@@ -416,15 +450,15 @@ export default function App() {
   );
 }
 
-function CourseCard({ course, onSkip }: { course: CourseStats; onSkip: () => void }) {
+function CourseCard({ course, onSkip, onAttended }: { course: CourseStats; onSkip: () => void; onAttended: () => void }) {
   return (
     <GlassPanel className="p-6 flex flex-col justify-between border-white/15 bg-slate-900/40">
       <div className="flex justify-between items-start">
         <div>
           <span className="text-xs font-mono text-slate-400">{course.code}</span>
           <h4 className="text-md font-bold text-white mt-0.5">{course.name}</h4>
-          <p className="text-[10px] text-slate-500 mt-0.5">
-            {course.attendedCount} attended • {course.skippedCount} skipped
+          <p className="text-[10px] text-slate-500 mt-0.5 tabular-nums">
+            {course.attendedCount} attended · {course.skippedCount} skipped
           </p>
         </div>
         {course.riskLevel === 'SAFE' && <CheckCircle size={16} className="text-emerald-400" />}
@@ -435,16 +469,21 @@ function CourseCard({ course, onSkip }: { course: CourseStats; onSkip: () => voi
       <div className="mt-6 flex items-end justify-between">
         <div>
           <p className="text-xs text-slate-400">Remaining Skips</p>
-          <p className={`text-2xl font-bold ${course.riskLevel === 'SAFE' ? 'text-emerald-400' :
+          <p className={`text-2xl font-bold tabular-nums ${course.riskLevel === 'SAFE' ? 'text-emerald-400' :
             course.riskLevel === 'WARNING' ? 'text-amber-400' : 'text-rose-400'
             }`}>
             {course.remainingSkips < 0 ? 0 : course.remainingSkips}
           </p>
-          <p className="text-[10px] text-slate-500">{course.attendancePercentage}% current</p>
+          <p className="text-[10px] text-slate-500 tabular-nums">{course.attendancePercentage}% current</p>
         </div>
-        <GlassButton onClick={onSkip} size="sm">
-          <ShieldCheck size={14} className="mr-1.5" /> Skip
-        </GlassButton>
+        <div className="flex gap-2">
+          <GlassButton onClick={onAttended} size="sm" variant="primary">
+            <CheckCircle size={13} className="mr-1.5" /> Attended
+          </GlassButton>
+          <GlassButton onClick={onSkip} size="sm">
+            <ShieldCheck size={13} className="mr-1.5" /> Skip
+          </GlassButton>
+        </div>
       </div>
     </GlassPanel>
   );

@@ -1,5 +1,5 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core';
-import { ExternalLink, GitBranch, ListChecks, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { ExternalLink, GitBranch, GripVertical, ListChecks, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import type { Project } from '@/lib/api';
 import { cardDroppableId, dragIdForProject } from './vault';
@@ -41,31 +41,40 @@ export function ProjectCard({ project, menuOpen, onToggleMenu, onCloseMenu, onOp
         ref={setNodeRef}
         {...listeners}
         {...attributes}
+        onContextMenu={(e) => e.preventDefault()}
         onDoubleClick={onOpenDetail}
-        className={`relative rounded-2xl border border-white/10 bg-slate-900/70 p-3 transition-all cursor-grab active:cursor-grabbing select-none outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 hover:border-white/20 ${
+        className={`draggable-item relative rounded-2xl border border-white/10 bg-slate-900/70 p-3 transition-all cursor-grab active:cursor-grabbing select-none outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 hover:border-white/20 ${
           isDragging ? 'opacity-30' : ''
         }`}
       >
-        <div className="flex items-start justify-between gap-2">
-          <button type="button" onClick={onOpenDetail} className="min-w-0 text-left">
-            <p className="text-sm font-bold text-white truncate">{project.title}</p>
-            <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-              {project.kind === 'COURSEWORK' ? (
-                <span className="rounded-full border border-indigo-400/30 bg-indigo-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-indigo-300">
-                  {project.courseCode ?? 'Coursework'}
-                </span>
-              ) : (
-                <span className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] font-semibold text-slate-300">
-                  Personal
-                </span>
-              )}
-              {project.techStack.slice(0, 3).map((tag) => (
-                <span key={tag} className="rounded-full bg-white/5 px-1.5 py-0.5 text-[9px] text-slate-400">
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </button>
+        <div className="flex items-start justify-between gap-1.5">
+          <div className="flex items-start gap-1 min-w-0 flex-1">
+            <span
+              className="drag-handle touch-none shrink-0 w-6 h-6 -ml-1 mt-0.5 flex items-center justify-center text-slate-500 hover:text-slate-300"
+              aria-label="Drag handle"
+            >
+              <GripVertical size={13} />
+            </span>
+            <button type="button" onClick={onOpenDetail} className="min-w-0 text-left flex-1">
+              <p className="text-sm font-bold text-white truncate">{project.title}</p>
+              <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                {project.kind === 'COURSEWORK' ? (
+                  <span className="rounded-full border border-indigo-400/30 bg-indigo-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-indigo-300">
+                    {project.courseCode ?? 'Coursework'}
+                  </span>
+                ) : (
+                  <span className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] font-semibold text-slate-300">
+                    Personal
+                  </span>
+                )}
+                {project.techStack.slice(0, 3).map((tag) => (
+                  <span key={tag} className="rounded-full bg-white/5 px-1.5 py-0.5 text-[9px] text-slate-400">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </button>
+          </div>
 
           <button
             type="button"

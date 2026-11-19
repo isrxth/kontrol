@@ -3,13 +3,11 @@ import { createPortal } from 'react-dom';
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
   pointerWithin,
-  useSensor,
-  useSensors,
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
+import { useDndSensors } from '@/hooks/useDndSensors';
 import { ArrowLeftRight, RefreshCw } from 'lucide-react';
 import { timetableSlots, noonBreak } from '@/lib/api';
 import {
@@ -57,7 +55,7 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
     place, move, unassign, setVenue, toggleCancelled, toggleSwap, logForCell, refetch,
   } = timetable;
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const sensors = useDndSensors();
   const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [venueEdit, setVenueEdit] = useState<{ slotId: string; code: string; venue: string } | null>(null);
@@ -286,11 +284,11 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
       </div>
 
       {createPortal(
-        <DragOverlay dropAnimation={null}>
+        <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.2, 0, 0, 1)' }}>
           {dragPreview && (
-            <div className="rounded-2xl border border-indigo-400/40 bg-slate-800/90 px-3 py-2 shadow-2xl backdrop-blur-md">
+            <div className="rounded-2xl border border-indigo-400/50 bg-[#161b2e]/95 px-3.5 py-2.5 shadow-2xl backdrop-blur-md scale-[1.03] select-none">
               <span className="text-[10px] font-mono font-semibold text-indigo-300">{dragPreview.code}</span>
-              <p className="text-xs font-bold text-white">{dragPreview.name}</p>
+              <p className="text-xs font-bold text-white leading-tight">{dragPreview.name}</p>
             </div>
           )}
         </DragOverlay>,

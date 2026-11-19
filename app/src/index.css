@@ -57,6 +57,60 @@ body,
   color: #f8fafc;
 }
 
+/* Safe-area CSS custom properties (overridden from Java on Android) */
+:root {
+  --sat: max(env(safe-area-inset-top, 0px), 32px);
+  --sab: max(env(safe-area-inset-bottom, 0px), 20px);
+}
+
+@media (min-width: 768px) {
+  :root {
+    --sat: 0px;
+    --sab: 0px;
+  }
+}
+
+/* Touch & Drag ergonomics — prevent native text selection & callout menu */
+.draggable-item,
+[data-dnd-draggable] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+.drag-handle {
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Scrollbar hide utility */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Mobile tab transitions — transform + opacity only, never height/top/margin */
+@media (prefers-reduced-motion: no-preference) {
+  .mobile-tab-enter {
+    animation: mobileSlideUp 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+@keyframes mobileSlideUp {
+  from { opacity: 0; transform: translate3d(0, 14px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+/* GPU compositing — only for fixed chrome elements */
+.dock-glass {
+  will-change: transform;
+  transform: translateZ(0);
+}
+
 /* Prevent browser from painting a dark canvas due to color-scheme:dark */
 html {
   color-scheme: dark;

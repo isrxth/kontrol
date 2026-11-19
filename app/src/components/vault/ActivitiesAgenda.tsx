@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CalendarClock, Check, Pencil, Plus, Trash2 } from 'lucide-react';
+import { CalendarClock, Check, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { Activity, ActivityType, CourseStats } from '@/lib/api';
 import type { ActivitiesController } from '@/hooks/useActivities';
 import { todayLocal } from '@/lib/timetable';
@@ -181,10 +181,15 @@ function ActivityRow({ activity, dimmed = false, onToggleDone, onEdit, onDelete 
 
   return (
     <div
-      className={`group flex items-center gap-3 rounded-2xl border px-3.5 py-2.5 transition-all ${
+      onContextMenu={(e) => e.preventDefault()}
+      className={`draggable-item group flex items-center gap-2.5 rounded-2xl border px-3 py-2.5 transition-all select-none ${
         dimmed ? 'border-white/5 bg-white/[0.015] opacity-50' : 'border-white/10 bg-slate-900/50 hover:border-white/20'
       }`}
     >
+      <span className="drag-handle touch-none shrink-0 p-0.5 text-slate-600 hover:text-slate-400 cursor-grab">
+        <GripVertical size={13} />
+      </span>
+
       <button
         type="button"
         onClick={onToggleDone}

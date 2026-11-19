@@ -24,7 +24,8 @@ export function ModuleChip({ slot, course, isCancelled, isToday, logStatus, onOp
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={`relative h-full rounded-2xl border p-3 pr-9 text-left transition-all cursor-grab active:cursor-grabbing select-none outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 ${
+      onContextMenu={(e) => e.preventDefault()}
+      className={`draggable-item relative h-full rounded-2xl border p-3 pr-9 text-left transition-all cursor-grab active:cursor-grabbing select-none outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 ${
         isDragging ? 'opacity-30' : ''
       } ${
         isCancelled
