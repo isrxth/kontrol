@@ -9,7 +9,7 @@ import {
 } from '@dnd-kit/core';
 import { useDndSensors } from '@/hooks/useDndSensors';
 import { ArrowLeftRight, RefreshCw } from 'lucide-react';
-import { timetableSlots, noonBreak, LogStatus } from '@/lib/api';
+import { timetableSlots, noonBreak, type LogStatus } from '@/lib/api';
 import {
   buildGrid,
   DAY_LABELS,
@@ -66,7 +66,7 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
   const grid = useMemo(() => buildGrid(slots, swapMap), [slots, swapMap]);
   const paletteCourses = useMemo(() => unplacedCourses(courses, slots, swapMap), [courses, slots, swapMap]);
   const todayStatusMap = useMemo(() => {
-    const map = new Map<string, 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | 'GHOST'>();
+    const map = new Map<string, LogStatus>();
     for (const t of today) {
       if (t.logStatus) map.set(`${t.dayOfWeek}:${t.startTime}`, t.logStatus);
     }
@@ -312,7 +312,7 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
 }
 
 interface CellHandlers {
-  onLog: (cell: GridCell, status: 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | 'GHOST') => void;
+  onLog: (cell: GridCell, status: LogStatus) => void;
   onToggleCancelClass: (cell: GridCell) => void;
   onEditVenue: (cell: GridCell) => void;
   onRemove: (cell: GridCell) => void;
@@ -322,7 +322,7 @@ interface SlotRowGroupProps {
   defIndex: number;
   cells: GridCell[];
   todayDow: number;
-  todayStatusMap: Map<string, 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | 'GHOST'>;
+  todayStatusMap: Map<string, LogStatus>;
   openMenu: string | null;
   setOpenMenu: (id: string | null) => void;
   dragActive: boolean;
@@ -444,7 +444,7 @@ interface MobileBoardProps {
   paletteCourses: TimetableController['courses'];
   dragActive: boolean;
   todayDow: number;
-  todayStatusMap: Map<string, 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | 'GHOST'>;
+  todayStatusMap: Map<string, LogStatus>;
   openMenu: string | null;
   setOpenMenu: (id: string | null) => void;
   handlers: CellHandlers;
@@ -506,7 +506,7 @@ interface MobileSlotRowProps {
   defIndex: number;
   cell: GridCell;
   isToday: boolean;
-  todayStatusMap: Map<string, 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | 'GHOST'>;
+  todayStatusMap: Map<string, LogStatus>;
   openMenu: string | null;
   setOpenMenu: (id: string | null) => void;
   dragActive: boolean;

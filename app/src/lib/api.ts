@@ -162,15 +162,27 @@ let authToken: string | null = null;
 
 export function setAuthToken(token: string | null) {
   authToken = token;
+  if (typeof window !== 'undefined') {
+    if (token) {
+      localStorage.setItem('kontrol_token', token);
+    } else {
+      localStorage.removeItem('kontrol_token');
+    }
+  }
 }
 
 export function getAuthToken(): string | null {
-  return authToken;
+  if (authToken) return authToken;
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('kontrol_token');
+  }
+  return null;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers({ 'Content-Type': 'application/json', ...(init?.headers ?? {}) });
-  if (authToken) headers.set('Authorization', `Bearer ${authToken}`);
+  const token = getAuthToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
 
   const res = await fetch(`${BASE}${path}`, {
     ...init,
@@ -179,7 +191,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (res.status === 204) return undefined as T;
   if (res.status === 401) {
-    if (typeof window !== 'undefined') window.dispatchEvent(new Event('kontrol:lock'));
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('kontrol_token');
+      window.dispatchEvent(new Event('kontrol:lock'));
+    }
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? 'Unauthorized');
   }

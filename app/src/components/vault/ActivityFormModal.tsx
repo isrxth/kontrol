@@ -1,31 +1,21 @@
-'use client';
-
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import { createPortal } from 'react-dom';
+import { X } from 'lucide-react';
 import type { Activity, ActivityPriority, ActivityType, NewActivityInput } from '@/lib/api';
-import { GlassSheet } from '@/components/ui/GlassSheet';
-import { GlassButton } from '@/components/glassyui/glass-button';
-import { GlassInput } from '@/components/glassyui/glass-input';
+import { GlassDateTimePicker } from './GlassDateTimePicker';
 
 interface ActivityFormModalProps {
-  open: boolean;
-  onClose: () => void;
   courses: { id: string; code: string; name: string }[];
   initial?: Activity | null;
   busy: boolean;
+  onClose: () => void;
   onSave: (input: NewActivityInput) => Promise<boolean>;
 }
 
 const TYPE_OPTIONS: ActivityType[] = ['EXAM', 'COURSEWORK', 'EVENT', 'OTHER'];
 const PRIORITY_OPTIONS: ActivityPriority[] = ['LOW', 'MEDIUM', 'HIGH'];
 
-export function ActivityFormModal({
-  open,
-  onClose,
-  courses,
-  initial,
-  busy,
-  onSave,
-}: ActivityFormModalProps) {
+export function ActivityFormModal({ courses, initial, busy, onClose, onSave }: ActivityFormModalProps) {
   const [form, setForm] = useState({
     title: initial?.title ?? '',
     type: (initial?.type ?? 'OTHER') as ActivityType,
@@ -37,21 +27,7 @@ export function ActivityFormModal({
   });
   const [formError, setFormError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    setForm({
-      title: initial?.title ?? '',
-      type: (initial?.type ?? 'OTHER') as ActivityType,
-      courseId: initial?.courseId ?? '',
-      dueDate: initial?.dueDate ?? '',
-      dueTime: initial?.dueTime ?? '',
-      priority: (initial?.priority ?? 'MEDIUM') as ActivityPriority,
-      notes: initial?.notes ?? '',
-    });
-    setFormError(null);
-  }, [open, initial]);
-
-  const handleSave = useCallback(async () => {
+  const handleSave = async () => {
     setFormError(null);
     if (!form.title.trim()) {
       setFormError('Title is required.');
@@ -67,125 +43,136 @@ export function ActivityFormModal({
       notes: form.notes.trim() || null,
     });
     if (ok) onClose();
-  }, [form, onSave, onClose, busy]);
+  };
 
-  const footer = (
-    <div className="flex justify-end gap-3 pt-1">
-      <GlassButton variant="ghost" size="md" onClick={onClose}>
-        Cancel
-      </GlassButton>
-      <GlassButton variant="primary" size="md" onClick={handleSave} disabled={busy}>
-        {busy ? 'Saving…' : initial ? 'Save changes' : 'Add activity'}
-      </GlassButton>
+  const content = (
+    <div
+      className="fixed inset-0 z-[100] flex flex-col justify-end sm:justify-center items-center bg-black/75 backdrop-blur-sm p-0 sm:p-4 overflow-y-auto overscroll-contain"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md max-h-[85dvh] sm:max-h-[85vh] flex flex-col rounded-t-[28px] rounded-b-none sm:rounded-3xl border border-b-0 sm:border-b border-white/15 bg-slate-900/98 shadow-2xl mb-0 sm:my-auto overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header - fixed */}
+        <div className="p-5 sm:p-6 pb-3 shrink-0 border-b border-white/[0.06]">
+          <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-2.5 sm:hidden" />
+          <div className="flex items-start justify-between">
+            <div>
+              <h3 className="text-xl font-bold text-white">{initial ? 'Edit Activity' : 'New Activity'}</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Exams, coursework, events — the planner will remind you later</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl p-2 text-slate-400 hover:text-white hover:bg-white/10 transition-all"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable Form Body */}
+        <div className="flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6 space-y-4">
+          <input
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            placeholder="What needs doing?"
+            maxLength={200}
+            className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-400/60"
+          />
+
+          <div className="grid grid-cols-4 gap-1.5">
+            {TYPE_OPTIONS.map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setForm({ ...form, type })}
+                className={`rounded-xl border px-2 py-2 text-[10px] font-semibold transition-all ${
+                  form.type === type
+                    ? 'border-indigo-400/50 bg-indigo-500/20 text-indigo-200'
+                    : 'border-white/10 bg-white/[0.03] text-slate-400 hover:bg-white/10'
+                }`}
+              >
+                {type}
+              </button>
+            ))}
+          </div>
+
+          <GlassDateTimePicker
+            date={form.dueDate}
+            time={form.dueTime}
+            onDateChange={(dueDate) => setForm({ ...form, dueDate })}
+            onTimeChange={(dueTime) => setForm({ ...form, dueTime })}
+          />
+
+          <div className="space-y-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Priority</span>
+            <div className="grid grid-cols-3 gap-1.5">
+              {PRIORITY_OPTIONS.map((priority) => (
+                <button
+                  key={priority}
+                  type="button"
+                  onClick={() => setForm({ ...form, priority })}
+                  className={`rounded-xl border px-2 py-2 text-[10px] font-semibold transition-all ${
+                    form.priority === priority
+                      ? 'border-indigo-400/50 bg-indigo-500/20 text-indigo-200'
+                      : 'border-white/10 bg-white/[0.03] text-slate-400 hover:bg-white/10'
+                  }`}
+                >
+                  {priority}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <select
+            value={form.courseId}
+            onChange={(e) => setForm({ ...form, courseId: e.target.value })}
+            className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-400/60"
+          >
+            <option value="">Link a module (optional)</option>
+            {courses.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.code} — {c.name}
+              </option>
+            ))}
+          </select>
+
+          <textarea
+            value={form.notes}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            placeholder="Notes (syllabus chapters, venue, what to bring…)"
+            rows={2}
+            className="w-full resize-none rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-400/60"
+          />
+
+          {formError && (
+            <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-2">{formError}</p>
+          )}
+        </div>
+
+        {/* Footer Actions - fixed with safe-area bottom */}
+        <div className="p-4 sm:p-5 shrink-0 border-t border-white/[0.08] bg-slate-900/98 pb-[calc(var(--sab,env(safe-area-inset-bottom,0px))+16px)] sm:pb-5 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl px-4 py-2.5 text-xs text-slate-300 hover:bg-white/10 hover:text-white transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void handleSave()}
+            className="rounded-xl bg-indigo-500 px-5 py-2.5 text-xs font-semibold text-white hover:bg-indigo-400 disabled:opacity-50 transition-all shadow-lg shadow-indigo-500/20"
+          >
+            {busy ? 'Saving…' : initial ? 'Save changes' : 'Add activity'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 
-  return (
-    <GlassSheet
-      open={open}
-      onClose={onClose}
-      side="bottom"
-      title={initial ? 'Edit Activity' : 'New Activity'}
-      subtitle="Exams, coursework, events — the planner will remind you later"
-      className="w-full sm:w-auto max-h-[85dvh] pointer-events-auto"
-      footer={footer}
-    >
-      <GlassInput
-        label="What needs doing?"
-        placeholder="…"
-        value={form.title}
-        onChange={(e) => setForm({ ...form, title: e.target.value })}
-      />
-
-      <div className="grid grid-cols-4 gap-1.5">
-        {TYPE_OPTIONS.map((type) => (
-          <button
-            key={type}
-            type="button"
-            onClick={() => setForm({ ...form, type })}
-            className={`rounded-xl border px-2 py-2 text-[10px] font-semibold transition-all ${
-              form.type === type
-                ? 'border-indigo-400/50 bg-indigo-500/20 text-indigo-200'
-                : 'border-white/10 bg-white/[0.03] text-slate-400 hover:bg-white/10'
-            }`}
-          >
-            {type}
-          </button>
-        ))}
-      </div>
-
-      <div className="space-y-2">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Due date</span>
-        <input
-          value={form.dueDate}
-          onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
-          type="date"
-          className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-400/60"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Time (optional)</span>
-        <input
-          value={form.dueTime}
-          onChange={(e) => setForm({ ...form, dueTime: e.target.value })}
-          type="time"
-          className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-400/60"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Priority</span>
-        <div className="grid grid-cols-3 gap-1.5">
-          {PRIORITY_OPTIONS.map((priority) => (
-            <button
-              key={priority}
-              type="button"
-              onClick={() => setForm({ ...form, priority })}
-              className={`rounded-xl border px-2 py-2 text-[10px] font-semibold transition-all ${
-                form.priority === priority
-                  ? 'border-indigo-400/50 bg-indigo-500/20 text-indigo-200'
-                  : 'border-white/10 bg-white/[0.03] text-slate-400 hover:bg-white/10'
-              }`}
-            >
-              {priority}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Link module (optional)</span>
-        <select
-          value={form.courseId}
-          onChange={(e) => setForm({ ...form, courseId: e.target.value })}
-          className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-400/60"
-        >
-          <option value="">Link a module (optional)</option>
-          {courses.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.code} — {c.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="space-y-2">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Notes</span>
-        <textarea
-          value={form.notes}
-          onChange={(e) => setForm({ ...form, notes: e.target.value })}
-          placeholder="Notes (syllabus chapters, venue, what to bring…)"
-          rows={2}
-          className="w-full resize-none rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-400/60"
-        />
-      </div>
-
-      {formError && (
-        <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-2">
-          {formError}
-        </p>
-      )}
-    </GlassSheet>
-  );
+  return typeof document !== 'undefined' ? createPortal(content, document.body) : content;
 }

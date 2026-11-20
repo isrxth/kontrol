@@ -21,7 +21,7 @@ export function useAuth() {
 }
 
 const isNative = typeof window !== 'undefined' && Capacitor.isNativePlatform();
-const BIOMETRIC_SERVER = 'kontrol';
+const BIOMETRIC_SERVER = 'com.kontrol.app';
 
 function loadNativePlugins() {
   return Promise.all([
@@ -49,6 +49,58 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const promptingRef = useRef(false);
   const firstLaunchRef = useRef(true);
 
+  const attemptBiometricUnlock = useCallback(async () => {
+    if (!isNative) return;
+    if (promptingRef.current) return;
+    promptingRef.current = true;
+    try {
+      const [{ NativeBiometric }] = await loadNativePlugins();
+      const available = await NativeBiometric.isAvailable();
+      if (!available.isAvailable) {
+        setStatus('locked');
+        return;
+      }
+      await NativeBiometric.verifyIdentity({
+        reason: 'Unlock Kontrol',
+        title: 'Biometric Unlock',
+      });
+      const creds = await NativeBiometric.getCredentials({ server: BIOMETRIC_SERVER });
+      if (creds && creds.password) {
+        setAuthToken(creds.password);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('kontrol_token', creds.password);
+        }
+        setStatus('authenticated');
+        setError(null);
+        return;
+      }
+      setStatus('locked');
+    } catch {
+      setStatus('locked');
+    } finally {
+      promptingRef.current = false;
+    }
+  }, []);
+
+  const saveToken = useCallback(async (token: string) => {
+    setAuthToken(token);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('kontrol_token', token);
+    }
+    if (isNative) {
+      try {
+        const [{ NativeBiometric }] = await loadNativePlugins();
+        await NativeBiometric.setCredentials({
+          username: 'owner',
+          password: token,
+          server: BIOMETRIC_SERVER,
+        });
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
   const checkStatus = useCallback(async () => {
     try {
       const data = await api.authStatus();
@@ -58,16 +110,22 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         setStatus('setup');
       } else {
         setStatus('locked');
+        if (isNative) {
+          void attemptBiometricUnlock();
+        }
       }
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Auth check failed');
       setStatus('error');
     }
-  }, []);
+  }, [attemptBiometricUnlock]);
 
   const lock = useCallback(async () => {
     setAuthToken(null);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('kontrol_token');
+    }
     setStatus('locked');
     setError(null);
   }, []);
@@ -92,48 +150,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     let mounted = true;
     let subs: { remove: () => void } | null = null;
 
-    const attemptBiometricUnlock = async () => {
-      if (promptingRef.current) return;
-      if (status !== 'locked' && status !== 'authenticated') return;
-      promptingRef.current = true;
-      try {
-        const [{ NativeBiometric }] = await loadNativePlugins();
-        const available = await NativeBiometric.isAvailable();
-        if (!available.isAvailable) {
-          setStatus('locked');
-          return;
-        }
-        const creds = await NativeBiometric.getCredentials({ server: BIOMETRIC_SERVER });
-        if (creds.password) {
-          setAuthToken(creds.password);
-          const re = await api.authStatus();
-          if (re.authenticated) {
-            setStatus('authenticated');
-            setError(null);
-            return;
-          }
-        }
-        await NativeBiometric.verifyIdentity({
-          reason: 'Unlock Kontrol',
-          title: 'Unlock Kontrol',
-          subtitle: 'Use fingerprint or face',
-          description: 'Authenticate to open Kontrol',
-          negativeButtonText: 'Use PIN / Code',
-        });
-        // After a successful native verification, re-check server status.
-        await checkStatus();
-      } catch {
-        setStatus('locked');
-      } finally {
-        if (mounted) promptingRef.current = false;
-      }
-    };
-
     const onResume = async () => {
-      if (status === 'authenticated') {
-        // Every resume re-prompts biometrics per product spec.
-        await lock();
-      }
+      await lock();
       await attemptBiometricUnlock();
     };
 
@@ -157,15 +175,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     };
 
     void setupListener();
-    // Initial native unlock attempt after the first status check settles.
-    void attemptBiometricUnlock();
 
     return () => {
       mounted = false;
       subs?.remove();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isNative, status, checkStatus, lock]);
+  }, [attemptBiometricUnlock, lock]);
 
   // Global 401 lock
   useEffect(() => {
@@ -209,7 +224,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         code: totpCode,
         pin,
       });
-      setAuthToken(data.token);
+      await saveToken(data.token);
       setSetupData(null);
       setSetupStep('secret');
       setTotpCode('');
@@ -233,13 +248,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       const data = await api.verifyTotp(totpCode);
-      setAuthToken(data.token);
+      await saveToken(data.token);
       setStatus('authenticated');
       setTotpCode('');
-      if (isNative) {
-        const [{ NativeBiometric }] = await loadNativePlugins();
-        await NativeBiometric.setCredentials({ username: 'owner', password: data.token, server: BIOMETRIC_SERVER });
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Invalid code');
     } finally {
@@ -256,13 +267,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       const data = await api.verifyPin(enteredPin);
-      setAuthToken(data.token);
+      await saveToken(data.token);
       setStatus('authenticated');
       setEnteredPin('');
-      if (isNative) {
-        const [{ NativeBiometric }] = await loadNativePlugins();
-        await NativeBiometric.setCredentials({ username: 'owner', password: data.token, server: BIOMETRIC_SERVER });
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Invalid PIN');
     } finally {

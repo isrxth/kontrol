@@ -87,7 +87,6 @@ export function BuildVault({ projectsCtrl, activitiesCtrl, courses }: BuildVault
 
       {formTarget && (
         <ProjectFormModal
-          open={!!formTarget}
           courses={courses}
           initial={formTarget === 'new' ? null : formTarget}
           busy={busy}

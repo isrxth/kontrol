@@ -9,7 +9,7 @@ import { ModuleChip } from './ModuleChip';
 interface SlotCellProps {
   cell: GridCell;
   isToday: boolean;
-  logStatus: 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | 'GHOST' | null;
+  logStatus: LogStatus | null;
   dragActive: boolean;
   menuOpen: boolean;
   onToggleMenu: () => void;
