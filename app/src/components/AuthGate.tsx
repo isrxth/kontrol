@@ -2,9 +2,8 @@
 
 import { useCallback, useContext, useEffect, useRef, useState, createContext } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { ShieldAlert, ShieldCheck } from 'lucide-react';
-import { setAuthToken } from '@/lib/api';
-import { api } from '@/lib/api';
+import { ShieldAlert, ShieldCheck, WifiOff, RefreshCw } from 'lucide-react';
+import { setAuthToken, api, BASE } from '@/lib/api';
 import { GlassSheet } from '@/components/ui/GlassSheet';
 
 interface AuthContextValue {
@@ -21,7 +20,7 @@ export function useAuth() {
   return ctx;
 }
 
-const isNative = (Capacitor as { isNativePlatform?: () => boolean }).isNativePlatform?.() ?? false;
+const isNative = typeof window !== 'undefined' && Capacitor.isNativePlatform();
 const BIOMETRIC_SERVER = 'kontrol';
 
 function loadNativePlugins() {
@@ -32,7 +31,7 @@ function loadNativePlugins() {
 }
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
-  const [status, setStatus] = useState<'loading' | 'setup' | 'locked' | 'authenticated'>('loading');
+  const [status, setStatus] = useState<'loading' | 'setup' | 'locked' | 'authenticated' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [setupStep, setSetupStep] = useState<'secret' | 'pin'>('secret');
   const [setupData, setSetupData] = useState<{
@@ -63,7 +62,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Auth check failed');
-      setStatus('locked');
+      setStatus('error');
     }
   }, []);
 
@@ -489,6 +488,39 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 rounded-full border-4 border-indigo-500/30 border-t-indigo-500 animate-[spin_1s_linear_infinite]" />
           <p className="text-slate-400 text-xs">Initializing security…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070707] p-4">
+        <div className="flex flex-col items-center max-w-sm text-center gap-4 p-6 rounded-3xl bg-[#161b2e]/90 border border-white/10 shadow-2xl backdrop-blur-xl">
+          <div className="w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
+            <WifiOff size={28} className="text-rose-400" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-white">Connection Error</h2>
+            <p className="text-xs text-slate-400 mt-1">
+              Could not reach the Kontrol server. Please check your internet connection or server status.
+            </p>
+            {error && (
+              <div className="mt-3 rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-[11px] font-mono text-rose-300 break-all text-left">
+                {error}
+              </div>
+            )}
+            <p className="text-[10px] text-slate-500 mt-2 font-mono">Endpoint: {BASE}</p>
+          </div>
+          <button
+            onClick={() => {
+              setStatus('loading');
+              void checkStatus();
+            }}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-500 hover:bg-indigo-400 active:scale-[0.98] py-2.5 text-xs font-semibold text-white transition-all shadow-lg shadow-indigo-500/20"
+          >
+            <RefreshCw size={14} /> Retry Connection
+          </button>
         </div>
       </div>
     );

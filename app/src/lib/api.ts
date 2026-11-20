@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import { todayLocal } from './dates';
 
 export interface CourseStats {
@@ -154,7 +155,8 @@ export interface NewActivityInput {
   notes?: string | null;
 }
 
-const BASE = import.meta.env.VITE_API_URL || '/api';
+const isNative = typeof window !== 'undefined' && Capacitor.isNativePlatform();
+export const BASE = (isNative ? import.meta.env.VITE_API_URL : undefined) || '/api';
 
 let authToken: string | null = null;
 

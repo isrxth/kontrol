@@ -13,23 +13,13 @@ import { query } from './db.js';
 
 export const app = express();
 
-const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS ?? '')
-  .split(',')
-  .map((o) => o.trim())
-  .filter(Boolean);
-
 app.use(
   cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      if (!ALLOWED_ORIGINS.length || ALLOWED_ORIGINS.includes(origin)) {
-        return callback(null, origin);
-      }
-      return callback(new Error(`Not allowed by CORS: ${origin}`));
-    },
+    origin: true,
     credentials: true,
   }),
 );
+
 app.use(cookieParser());
 app.use(express.json());
 
