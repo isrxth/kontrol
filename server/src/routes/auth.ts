@@ -14,17 +14,21 @@ import {
   verifyTotp,
   makeOtpAuthUri,
 } from '../auth.js';
-import { todayLocal } from '../dates.js';
 
 const router = Router();
 router.use(json());
 
-const SETUP_TTL_MS = 10 * 60 * 1000;
 const MAX_PIN_ATTEMPTS = 5;
 const PIN_LOCK_MINUTES = 15;
 
 function appAuthInitializedRow() {
-  return query<{ id: number; totp_secret: string | null; pin_hash: string | null; pin_attempts: number | null; pin_locked_until: string | null }>(
+  return query<{
+    id: number;
+    totp_secret: string | null;
+    pin_hash: string | null;
+    pin_attempts: number | null;
+    pin_locked_until: string | null;
+  }>(
     'SELECT id, totp_secret, pin_hash, pin_attempts, pin_locked_until FROM app_auth WHERE id = 1',
   );
 }
@@ -51,7 +55,7 @@ router.get('/status', async (req, res, next) => {
    2) POST with { setupToken, code, pin } -> verifies, stores, issues session. */
 router.post('/setup', async (req, res, next) => {
   try {
-    const { setupToken, code, pin } = req.body as {
+    const { setupToken, code, pin } = (req.body ?? {}) as {
       setupToken?: string;
       code?: string;
       pin?: string;
@@ -59,10 +63,10 @@ router.post('/setup', async (req, res, next) => {
 
     // Finalize setup.
     if (setupToken && code && pin) {
-    const payload = verifySession(setupToken);
-    if (!payload || (payload as { kind?: string }).kind !== 'setup') {
-      return res.status(400).json({ error: 'invalid or expired setup token' });
-    }
+      const payload = verifySession(setupToken);
+      if (!payload || (payload as { kind?: string }).kind !== 'setup') {
+        return res.status(400).json({ error: 'invalid or expired setup token' });
+      }
       const secret = (payload as { secret?: string }).secret;
       if (!secret || !verifyTotp(code, secret)) {
         return res.status(401).json({ error: 'invalid verification code' });
@@ -106,7 +110,7 @@ router.post('/setup', async (req, res, next) => {
 /* Public: verify TOTP code -> session. */
 router.post('/verify-totp', async (req, res, next) => {
   try {
-    const { code } = req.body as { code?: string };
+    const { code } = (req.body ?? {}) as { code?: string };
     const rows = await appAuthInitializedRow();
     const row = rows[0];
     if (!row?.totp_secret) {
@@ -126,7 +130,7 @@ router.post('/verify-totp', async (req, res, next) => {
 /* Public: verify backup PIN -> session, with rate limiting. */
 router.post('/verify-pin', async (req, res, next) => {
   try {
-    const { pin } = req.body as { pin?: string };
+    const { pin } = (req.body ?? {}) as { pin?: string };
     const rows = await appAuthInitializedRow();
     const row = rows[0];
     if (!row?.pin_hash) {
@@ -193,7 +197,7 @@ router.post('/reset-totp/init', requireAuth, async (_req, res, next) => {
 
 router.post('/reset-totp', requireAuth, async (req, res, next) => {
   try {
-    const { setupToken, code } = req.body as { setupToken?: string; code?: string };
+    const { setupToken, code } = (req.body ?? {}) as { setupToken?: string; code?: string };
     if (!setupToken) {
       return res.status(400).json({ error: 'missing reset token' });
     }
@@ -215,7 +219,7 @@ router.post('/reset-totp', requireAuth, async (req, res, next) => {
 /* Authenticated: change backup PIN (rate-limited on failure). */
 router.post('/change-pin', requireAuth, async (req, res, next) => {
   try {
-    const { currentPin, newPin } = req.body as { currentPin?: string; newPin?: string };
+    const { currentPin, newPin } = (req.body ?? {}) as { currentPin?: string; newPin?: string };
     const rows = await appAuthInitializedRow();
     const row = rows[0];
     if (!row?.pin_hash) {
@@ -232,7 +236,10 @@ router.post('/change-pin', requireAuth, async (req, res, next) => {
         [attempts, lockUntil],
       );
       if (lockUntil) {
-        return res.status(429).json({ error: 'too many failed PIN attempts', retryAfter: PIN_LOCK_MINUTES * 60 });
+        return res.status(429).json({
+          error: 'too many failed PIN attempts',
+          retryAfter: PIN_LOCK_MINUTES * 60,
+        });
       }
       return res.status(401).json({ error: 'invalid current PIN' });
     }
