@@ -27,10 +27,22 @@ export function verifySession(token: string): { sub: string; iat?: number; exp?:
   }
 }
 
-export function extractToken(req: Request): string | null {
-  const authHeader = req.headers.authorization;
-  if (authHeader?.startsWith('Bearer ')) return authHeader.slice(7);
-  return (req.cookies?.[SESSION_COOKIE] ?? null);
+export function extractToken(req?: Request): string | null {
+  const authHeader = req?.headers?.authorization;
+  if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+    return authHeader.slice(7);
+  }
+  if (req?.cookies?.[SESSION_COOKIE]) {
+    return req.cookies[SESSION_COOKIE];
+  }
+  const cookieHeader = req?.headers?.cookie;
+  if (typeof cookieHeader === 'string') {
+    const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE}=([^;]*)`));
+    if (match?.[1]) {
+      return decodeURIComponent(match[1]);
+    }
+  }
+  return null;
 }
 
 export function setSessionCookie(res: Response, token: string): void {

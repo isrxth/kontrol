@@ -30,12 +30,12 @@ function appAuthInitializedRow() {
 }
 
 /* Public: is the app initialized and/or currently authenticated? */
-router.get('/status', async (_req, res, next) => {
+router.get('/status', async (req, res, next) => {
   try {
     const rows = await appAuthInitializedRow();
     const row = rows[0];
     const initialized = Boolean(row?.totp_secret && row?.pin_hash);
-    const token = extractToken({} as any);
+    const token = extractToken(req);
     let authenticated = false;
     if (token) {
       authenticated = Boolean(verifySession(token));
