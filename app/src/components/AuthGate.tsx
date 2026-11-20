@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useContext, useEffect, useRef, useState, createContext } from 'react';
-import Capacitor from '@capacitor/core';
+import { Capacitor } from '@capacitor/core';
 import { ShieldAlert, ShieldCheck } from 'lucide-react';
-import { LOG_STATUS } from '@/lib/attendance-status';
+import { setAuthToken } from '@/lib/api';
 import { api } from '@/lib/api';
 import { GlassSheet } from '@/components/ui/GlassSheet';
 
@@ -67,12 +67,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const login = useCallback((token: string) => {
-    setAuthToken(token);
-    setStatus('authenticated');
-    setError(null);
-  }, []);
-
   const lock = useCallback(async () => {
     setAuthToken(null);
     setStatus('locked');
@@ -104,7 +98,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       if (status !== 'locked' && status !== 'authenticated') return;
       promptingRef.current = true;
       try {
-        const [{ NativeBiometric }, { App }] = await loadNativePlugins();
+        const [{ NativeBiometric }] = await loadNativePlugins();
         const available = await NativeBiometric.isAvailable();
         if (!available.isAvailable) {
           setStatus('locked');
@@ -144,12 +138,26 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       await attemptBiometricUnlock();
     };
 
-    subs = await ((await import('@capacitor/app')).App).addListener('appStateChange', (state: any) => {
-      if (state.isActive) {
-        void onResume();
+    const setupListener = async () => {
+      try {
+        const [, { App }] = await loadNativePlugins();
+        if (!mounted) return;
+        const sub = await App.addListener('appStateChange', (state: { isActive: boolean }) => {
+          if (state.isActive) {
+            void onResume();
+          }
+        });
+        if (!mounted) {
+          sub.remove();
+        } else {
+          subs = sub;
+        }
+      } catch {
+        // ignore
       }
-    });
+    };
 
+    void setupListener();
     // Initial native unlock attempt after the first status check settles.
     void attemptBiometricUnlock();
 
@@ -265,7 +273,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   // ---------- render ----------
   const LockScreen = () => {
-    const meta = LOG_STATUS.ATTENDED;
     return (
       <GlassSheet
         open={status === 'locked'}
@@ -488,7 +495,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ authenticated: status === 'authenticated', initialized: status !== 'loading', lock }}>
+    <AuthContext.Provider value={{ authenticated: status === 'authenticated', initialized: true, lock }}>
       {status !== 'authenticated' && (
         <div className="fixed inset-0 z-[199] bg-[#070707]">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_120%_at_50%_-10%,rgba(37,99,235,0.18),transparent)]" />

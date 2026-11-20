@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import Capacitor from '@capacitor/core';
+import { Capacitor } from '@capacitor/core';
 import { AlertTriangle, Copy, Lock, RefreshCw, ShieldCheck, Trash2, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from './AuthGate';
