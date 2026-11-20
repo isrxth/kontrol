@@ -150,6 +150,7 @@ export function ActivitiesAgenda({ ctrl, courses }: ActivitiesAgendaProps) {
 
       {formTarget && (
         <ActivityFormModal
+          open={!!formTarget}
           courses={courses}
           initial={formTarget === 'new' ? null : formTarget}
           busy={ctrl.busy}

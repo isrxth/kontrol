@@ -1,7 +1,5 @@
 import { useState } from 'react';
 import { ReactiveBackground } from './components/ui/ReactiveBackground';
-import { GlassHeader } from '@/components/glassyui/glass-header';
-import { GlassTabs, GlassTabsList, GlassTabsTrigger } from '@/components/glassyui/glass-tabs';
 import { GlassSurface } from '@/components/glassyui/glass-surface';
 import { GlassPanel } from '@/components/glassyui/glass-panel';
 import { GlassButton } from '@/components/glassyui/glass-button';
@@ -15,8 +13,29 @@ import { TimetableBoard } from '@/components/timetable/TimetableBoard';
 import { BuildVault } from '@/components/vault/BuildVault';
 import { MobileShell } from '@/components/mobile/MobileShell';
 import { bucketOf } from '@/components/vault/vault';
+import { GlassDock } from '@/components/navigation/GlassDock';
+import { AttendanceLogDrawer } from '@/components/AttendanceLogDrawer';
+import { SettingsModal } from '@/components/SettingsModal';
 import type { CourseStats, TodaySlot } from '@/lib/api';
-import { ShieldCheck, Settings, CheckCircle, AlertTriangle, ShieldAlert, Plus, X, Zap, Clock, BookOpen, CalendarCheck, LayoutDashboard, Calendar, FolderGit2, Bell } from 'lucide-react';
+import {
+  ShieldCheck,
+  CheckCircle,
+  AlertTriangle,
+  ShieldAlert,
+  Plus,
+  X,
+  Zap,
+  Clock,
+  BookOpen,
+  CalendarCheck,
+  LayoutDashboard,
+  Calendar,
+  FolderGit2,
+  Bell,
+  Ghost,
+  Calendar as CalendarIcon,
+} from 'lucide-react';
+
 
 function nextLectureSlot(today: TodaySlot[]): TodaySlot | null {
   if (today.length === 0) return null;
@@ -30,18 +49,18 @@ function nextLectureSlot(today: TodaySlot[]): TodaySlot | null {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('overview');
   const { courses, loading, error, refetch, logAttendance, addCourse } = useCourses();
   const timetable = useTimetable(courses, { onAttendanceLogged: refetch });
   const projectsCtrl = useProjects();
   const activitiesCtrl = useActivities();
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [saving, setSaving] = useState(false);
 
   const isMobile = useIsMobile();
-
-  const [form, setForm] = useState({ code: '', name: '', totalLectures: '', requiredPercent: '80' });
-  const [formError, setFormError] = useState<string | null>(null);
+  const NAV_TABS = [
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+    { id: 'timetable', label: 'Timetable', icon: Calendar, count: courses.length },
+    { id: 'projects', label: 'Vault', icon: FolderGit2 },
+    { id: 'notifications', label: 'Priority', icon: Bell },
+  ];
 
   // ── Mobile shell ─────────────────────────────────────────────────────────────
   if (isMobile) {
@@ -60,12 +79,18 @@ export default function App() {
   }
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const navigationTabs = [
-    { id: 'overview', label: 'Overview', shortLabel: 'Overview', icon: LayoutDashboard },
-    { id: 'timetable', label: 'Timetable', shortLabel: 'Timetable', icon: Calendar, count: courses.length },
-    { id: 'projects', label: 'Build Vault', shortLabel: 'Vault', icon: FolderGit2 },
-    { id: 'notifications', label: 'Priority Hub', shortLabel: 'Priority', icon: Bell },
-  ];
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [logCourse, setLogCourse] = useState<CourseStats | null>(null);
+  const [activeTab, setActiveTab] = useState('overview');
+
+  const [form, setForm] = useState({ code: '', name: '', totalLectures: '', requiredPercent: '80' });
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const eligibilitySummary = courses.length > 0
+    ? courses.every((c) => c.riskLevel !== 'DANGER')
+    : true;
 
   const handleAddCourse = async () => {
     setFormError(null);
@@ -97,10 +122,6 @@ export default function App() {
     }
   };
 
-  const eligibilitySummary = courses.length > 0
-    ? courses.every((c) => c.riskLevel !== 'DANGER')
-    : true;
-
   return (
     <div className="relative min-h-screen w-full text-slate-100 antialiased overflow-x-hidden">
       {/* 1. Animating Reactive WebGL Grainient Background */}
@@ -115,24 +136,8 @@ export default function App() {
         saturation={0.69}
       />
 
-      {/* 2. Main Glass Header */}
-      <GlassHeader
-        brand={
-          <div className="flex items-center gap-3">
-            <div>
-              <h1 className="text-2xl font-black text-white tracking-tight">Kontrol</h1>
-            </div>
-          </div>
-        }
-        actions={
-          <button className="p-2.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-2xl border border-transparent hover:border-white/15 transition-all">
-            <Settings size={18} />
-          </button>
-        }
-      />
-
-      {/* 3. Main Bento Workspace */}
-      <main className="relative z-10 min-h-screen px-4 md:px-8 pt-24 pb-32 flex flex-col items-center justify-center max-w-7xl mx-auto">
+      {/* 2. Main Bento Workspace (no top navigation bar — nav lives in the dock) */}
+      <main className="relative z-10 min-h-screen px-4 md:px-8 pt-8 pb-24 flex flex-col items-center justify-center max-w-7xl mx-auto">
         <GlassSurface
           preset="subtle"
           lens
@@ -142,50 +147,35 @@ export default function App() {
           <div className="flex justify-between items-center pb-6 border-b border-white/10">
             <div>
               <h2 className="text-2xl font-black text-white tracking-tight">
-                {activeTab === 'projects'
-                  ? 'Build Vault'
-                  : activeTab === 'timetable'
-                    ? 'Timetable'
-                    : activeTab === 'notifications'
-                      ? 'Priority Hub'
-                      : 'Overview Dashboard'}
+                {courses.length === 0 ? 'Overview Dashboard' : courses[0] ? 'Overview Dashboard' : 'Overview Dashboard'}
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                {activeTab === 'projects'
-                  ? 'Track builds, projects & academic deadlines'
-                  : activeTab === 'timetable'
-                    ? 'Weekly schedule & attendance logging'
-                    : activeTab === 'notifications'
-                      ? 'Alerts, reminders & priorities'
-                      : 'University Attendance Eligibility & Risk Analysis'}
+                University Attendance Eligibility & Risk Analysis
               </p>
             </div>
-            {(activeTab === 'overview' || activeTab === 'timetable') && (
-              <GlassButton variant="primary" size="sm" onClick={() => setShowAddModal(true)}>
-                <Plus size={16} className="mr-2" /> Add Module
-              </GlassButton>
-            )}
+            <GlassButton variant="primary" size="sm" onClick={() => setShowAddModal(true)}>
+              <Plus size={16} className="mr-2" /> Add Module
+            </GlassButton>
           </div>
 
           {/* Bento Grid Content */}
-          {activeTab === 'overview' && (
-            loading ? (
-              <GlassPanel className="p-12 text-center border-white/15 bg-slate-900/40">
-                <p className="text-slate-400 text-sm">Loading modules…</p>
-              </GlassPanel>
-            ) : error ? (
-              <GlassPanel className="p-12 text-center border-rose-500/30 bg-slate-900/40">
-                <h3 className="text-xl font-bold text-white">API Offline</h3>
-                <p className="text-rose-400 text-sm mt-2">{error}</p>
-                <p className="text-slate-500 text-xs mt-1">Make sure the Kontrol API is running on port 3001.</p>
-              </GlassPanel>
-            ) : courses.length === 0 ? (
-              <GlassPanel className="p-12 text-center border-white/15 bg-slate-900/40">
-                <h3 className="text-xl font-bold text-white">No modules tracked</h3>
-                <p className="text-slate-400 text-sm mt-2">Add your first module to start monitoring attendance risk.</p>
-              </GlassPanel>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {loading ? (
+            <GlassPanel className="p-12 text-center border-white/15 bg-slate-900/40">
+              <p className="text-slate-400 text-sm">Loading modules…</p>
+            </GlassPanel>
+          ) : error ? (
+            <GlassPanel className="p-12 text-center border-rose-500/30 bg-slate-900/40">
+              <h3 className="text-xl font-bold text-white">API Offline</h3>
+              <p className="text-rose-400 text-sm mt-2">{error}</p>
+              <p className="text-slate-500 text-xs mt-1">Make sure the Kontrol API is running on port 3001.</p>
+            </GlassPanel>
+          ) : courses.length === 0 ? (
+            <GlassPanel className="p-12 text-center border-white/15 bg-slate-900/40">
+              <h3 className="text-xl font-bold text-white">No modules tracked</h3>
+              <p className="text-slate-400 text-sm mt-2">Add your first module to start monitoring attendance risk.</p>
+            </GlassPanel>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
 
               {/* Bento Item 1: Large Featured Gauge Card */}
               <GlassPanel className="md:col-span-2 p-6 flex flex-col justify-between border-emerald-500/30 bg-slate-900/40 relative overflow-hidden">
@@ -210,16 +200,25 @@ export default function App() {
                       <span className="text-sm font-normal text-slate-400 ml-2">skips left</span>
                     </p>
                     <p className="text-[10px] text-slate-500 tabular-nums mt-1">
-                      {courses[0].attendedCount} attended · {courses[0].skippedCount} skipped
+                      {courses[0].attendedCount} attended{courses[0].ghostCount > 0 ? ` · ${courses[0].ghostCount} ghosted` : ''} · {courses[0].skippedCount} skipped
                     </p>
                   </div>
                   <div className="flex flex-col gap-2">
                     <GlassButton onClick={() => logAttendance(courses[0].id, 'ATTENDED')} size="sm" variant="primary">
-                      <CheckCircle size={13} className="mr-1.5" /> Attended
+                      <CheckCircle size={13} className="mr-1.5" /> Attend
                     </GlassButton>
                     <GlassButton onClick={() => logAttendance(courses[0].id, 'SKIPPED')} size="sm">
-                      + Log Skip
+                      Skip
                     </GlassButton>
+                    <GlassButton onClick={() => logAttendance(courses[0].id, 'GHOST')} size="sm" variant="ghost">
+                      <Ghost size={13} className="mr-1.5" /> Ghost
+                    </GlassButton>
+                    <button
+                      onClick={() => { setLogCourse(courses[0]); }}
+                      className="text-[10px] text-indigo-400 font-semibold underline underline-offset-4 hover:text-indigo-300 transition-colors flex items-center gap-1"
+                    >
+                      <CalendarIcon size={12} /> Dates / Medical log
+                    </button>
                   </div>
                 </div>
               </GlassPanel>
@@ -312,19 +311,20 @@ export default function App() {
                   course={course}
                   onSkip={() => logAttendance(course.id, 'SKIPPED')}
                   onAttended={() => logAttendance(course.id, 'ATTENDED')}
+                  onGhost={() => logAttendance(course.id, 'GHOST')}
+                  onOpenLog={() => { setLogCourse(course); }}
                 />
               ))}
               </div>
             )
-          )}
+          }
 
           {/* Tab Views */}
+          {activeTab === 'overview' && courses.length > 0 && <div className="min-h-0" />}
           {activeTab === 'timetable' && <TimetableBoard timetable={timetable} />}
-
           {activeTab === 'projects' && (
             <BuildVault projectsCtrl={projectsCtrl} activitiesCtrl={activitiesCtrl} courses={courses} />
           )}
-
           {activeTab === 'notifications' && (
             <GlassPanel className="p-12 text-center border-white/15 bg-slate-900/40">
               <h3 className="text-xl font-bold text-white">Priority Hub</h3>
@@ -334,47 +334,25 @@ export default function App() {
         </GlassSurface>
       </main>
 
-      {/* 4. Floating Bottom Glass Navigation */}
-      <nav className="fixed bottom-3 sm:bottom-6 inset-x-0 z-50 flex justify-center pointer-events-none px-2 sm:px-4 pb-[env(safe-area-inset-bottom,0px)]">
-        <div className="w-full max-w-[440px] sm:w-auto sm:max-w-none pointer-events-auto shadow-2xl">
-          <GlassTabs
-            value={activeTab}
-            onValueChange={setActiveTab}
-            orientation="horizontal"
-          >
-            <GlassTabsList className="w-full sm:w-auto p-1 gap-0.5 sm:gap-1">
-              {navigationTabs.map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <GlassTabsTrigger
-                    key={tab.id}
-                    value={tab.id}
-                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-1.5 sm:px-3.5 sm:py-2 text-[11px] sm:text-xs font-semibold whitespace-nowrap transition-all"
-                  >
-                    <Icon size={14} className="shrink-0 opacity-80" />
-                    <span className="hidden sm:inline">{tab.label}</span>
-                    <span className="inline sm:hidden">{tab.shortLabel}</span>
-                    {tab.count !== undefined && (
-                      <span className="ml-0.5 sm:ml-1 px-1.5 py-0.2 text-[9px] rounded-full bg-white/10 font-mono">
-                        {tab.count}
-                      </span>
-                    )}
-                  </GlassTabsTrigger>
-                );
-              })}
-            </GlassTabsList>
-          </GlassTabs>
-        </div>
-      </nav>
+      {/* 3. Floating bottom glass dock (desktop) */}
+      <GlassDock
+        tabs={NAV_TABS}
+        activeTab={activeTab}
+        onChange={setActiveTab}
+        brand="Kontrol"
+        settings
+      />
 
-      {/* 5. Add Module Modal */}
+      {/* 4. Add Module Modal */}
       {showAddModal && (
         <div
-          className="fixed inset-0 z-[100] flex flex-col justify-end sm:justify-center items-center bg-black/70 backdrop-blur-sm p-0 sm:p-4 overflow-y-auto"
+          className={`fixed inset-0 z-[100] flex flex-col justify-end sm:justify-center items-center bg-black/70 backdrop-blur-sm p-0 sm:p-4 overflow-y-auto ${
+            showAddModal ? 'sheet-enter' : 'sheet-exit'
+          }`}
           onClick={() => { setShowAddModal(false); setFormError(null); }}
         >
           <GlassPanel
-            className="w-full max-w-md max-h-[90dvh] sm:max-h-[85vh] overflow-y-auto rounded-t-[28px] rounded-b-none sm:rounded-3xl border-b-0 sm:border-b p-5 sm:p-6 space-y-5 border-white/15 bg-slate-900/95 relative shadow-2xl mb-0 sm:my-auto"
+            className={`w-full max-w-md max-h-[90dvh] sm:max-h-[85vh] overflow-y-auto rounded-t-[28px] rounded-b-none sm:rounded-3xl border-b-0 sm:border-b p-5 sm:p-6 space-y-5 border-white/15 bg-slate-900/95 relative shadow-2xl mb-0 sm:my-auto ${showAddModal ? '' : 'sheet-exit'}`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-1 sm:hidden" />
@@ -446,19 +424,41 @@ export default function App() {
           </GlassPanel>
         </div>
       )}
+
+      {/* 5. Settings modal */}
+      {showSettings && (
+        <SettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
+      )}
+
+      {/* 6. Attendance / Medical log drawer */}
+      {logCourse && (
+        <AttendanceLogDrawer course={logCourse} open={Boolean(logCourse)} onClose={() => setLogCourse(null)} />
+      )}
     </div>
   );
 }
 
-function CourseCard({ course, onSkip, onAttended }: { course: CourseStats; onSkip: () => void; onAttended: () => void }) {
+function CourseCard({
+  course,
+  onSkip,
+  onAttended,
+  onGhost,
+  onOpenLog,
+}: {
+  course: CourseStats;
+  onSkip: () => void;
+  onAttended: () => void;
+  onGhost: () => void;
+  onOpenLog: () => void;
+}) {
   return (
-    <GlassPanel className="p-6 flex flex-col justify-between border-white/15 bg-slate-900/40">
+    <GlassPanel className="p-6 flex flex-col justify-between border-white/15 bg-slate-900/40 cursor-pointer">
       <div className="flex justify-between items-start">
         <div>
           <span className="text-xs font-mono text-slate-400">{course.code}</span>
           <h4 className="text-md font-bold text-white mt-0.5">{course.name}</h4>
           <p className="text-[10px] text-slate-500 mt-0.5 tabular-nums">
-            {course.attendedCount} attended · {course.skippedCount} skipped
+            {course.attendedCount} attended{course.ghostCount > 0 ? ` · ${course.ghostCount} ghosted` : ''} · {course.skippedCount} skipped
           </p>
         </div>
         {course.riskLevel === 'SAFE' && <CheckCircle size={16} className="text-emerald-400" />}
@@ -478,13 +478,26 @@ function CourseCard({ course, onSkip, onAttended }: { course: CourseStats; onSki
         </div>
         <div className="flex gap-2">
           <GlassButton onClick={onAttended} size="sm" variant="primary">
-            <CheckCircle size={13} className="mr-1.5" /> Attended
+            <CheckCircle size={13} className="mr-1.5" /> Attend
           </GlassButton>
           <GlassButton onClick={onSkip} size="sm">
             <ShieldCheck size={13} className="mr-1.5" /> Skip
           </GlassButton>
+          <GlassButton onClick={onGhost} size="sm" variant="ghost">
+            <Ghost size={13} className="mr-1.5" /> Ghost
+          </GlassButton>
         </div>
       </div>
+
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenLog();
+        }}
+        className="mt-4 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-semibold text-slate-400 hover:text-white hover:bg-white/10 transition-all flex items-center justify-center gap-1"
+      >
+        <CalendarIcon size={12} /> Dates / Medical log
+      </button>
     </GlassPanel>
   );
 }

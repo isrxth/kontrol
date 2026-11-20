@@ -61,13 +61,60 @@ body,
 :root {
   --sat: max(env(safe-area-inset-top, 0px), 32px);
   --sab: max(env(safe-area-inset-bottom, 0px), 20px);
+  --kb: 0px;
 }
 
 @media (min-width: 768px) {
   :root {
     --sat: 0px;
     --sab: 0px;
+    --kb: 0px;
   }
+}
+
+/* Animated bottom sheet / modal entrance & exit */
+@keyframes sheetIn {
+  from { opacity: 0; transform: translate3d(0, 24px, 0) scale(0.98); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes sheetOut {
+  from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  to { opacity: 0; transform: translate3d(0, 24px, 0) scale(0.98); }
+}
+@keyframes drawerIn {
+  from { opacity: 0; transform: translate3d(100%, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes drawerOut {
+  from { opacity: 1; transform: translate3d(0, 0, 0); }
+  to { opacity: 0; transform: translate3d(100%, 0, 0); }
+}
+@keyframes backdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes backdropOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.sheet-enter {
+  animation: sheetIn 250ms ease-out both;
+}
+.sheet-exit {
+  animation: sheetOut 250ms ease-in both;
+}
+.drawer-enter {
+  animation: drawerIn 250ms ease-out both;
+}
+.drawer-exit {
+  animation: drawerOut 250ms ease-in both;
+}
+.backdrop-enter {
+  animation: backdropIn 250ms ease-out both;
+}
+.backdrop-exit {
+  animation: backdropOut 250ms ease-in both;
 }
 
 /* Touch & Drag ergonomics — prevent native text selection & callout menu */

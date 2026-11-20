@@ -1,3 +1,5 @@
+import { todayLocal } from './dates';
+
 export interface CourseStats {
   id: string;
   code: string;
@@ -6,6 +8,7 @@ export interface CourseStats {
   totalLectures: number;
   requiredRatio: number;
   attendedCount: number;
+  ghostCount: number;
   skippedCount: number;
   cancelledCount: number;
   maxSafeSkips: number;
@@ -29,7 +32,7 @@ export interface AttendanceLog {
   courseId: string;
   logDate: string;
   slotTime: string | null;
-  status: 'ATTENDED' | 'SKIPPED' | 'CANCELLED';
+  status: 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | 'GHOST';
   reason: string | null;
   createdAt: string;
 }
@@ -70,7 +73,7 @@ export interface TodaySlot {
   isCancelled: boolean;
   course: TimetableCourseInfo;
   swappedWith: { dayOfWeek: number; startTime: string; code: string } | null;
-  logStatus: 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | null;
+  logStatus: 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | 'GHOST' | null;
 }
 
 export interface NewCourseInput {
@@ -81,12 +84,10 @@ export interface NewCourseInput {
   credits?: number;
 }
 
-export type LogStatus = 'ATTENDED' | 'SKIPPED' | 'CANCELLED';
+export type LogStatus = 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | 'GHOST';
 
 export type ProjectStatus = 'IDEA' | 'BUILDING' | 'SHIPPED' | 'PAUSED';
-export type ProjectKind = 'PERSONAL' | 'COURSEWORK';
-
-export interface Project {
+export type ProjectKind = 'PERSONAL' | 'COURSEWORK';export interface Project {
   id: string;
   title: string;
   kind: ProjectKind;
@@ -155,12 +156,31 @@ export interface NewActivityInput {
 
 const BASE = import.meta.env.VITE_API_URL || '/api';
 
+let authToken: string | null = null;
+
+export function setAuthToken(token: string | null) {
+  authToken = token;
+}
+
+export function getAuthToken(): string | null {
+  return authToken;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers({ 'Content-Type': 'application/json', ...(init?.headers ?? {}) });
+  if (authToken) headers.set('Authorization', `Bearer ${authToken}`);
+
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...init,
+    headers,
+    credentials: 'include',
   });
   if (res.status === 204) return undefined as T;
+  if (res.status === 401) {
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('kontrol:lock'));
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? 'Unauthorized');
+  }
   const body = await res.json();
   if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
   return body as T;
@@ -179,7 +199,7 @@ export const api = {
   logAttendance: (courseId: string, status: LogStatus, reason?: string, options?: { logDate?: string; slotTime?: string }) =>
     request<AttendanceLog>(`/courses/${courseId}/logs`, {
       method: 'POST',
-      body: JSON.stringify({ status, reason, logDate: options?.logDate, slotTime: options?.slotTime }),
+      body: JSON.stringify({ status, reason, logDate: options?.logDate ?? todayLocal(), slotTime: options?.slotTime }),
     }),
 
   getTimetable: () => request<TimetableSlot[]>('/timetable'),
@@ -276,6 +296,28 @@ export const api = {
 
   deleteActivity: (id: string) =>
     request<void>(`/activities/${id}`, { method: 'DELETE' }),
+
+  // --- Authentication ---
+  authStatus: () => request<{ initialized: boolean; authenticated: boolean }>('/auth/status'),
+
+  authSetupInit: () => request<{ setupToken: string; secret: string; otpauth: string; qrDataUrl: string }>('/auth/setup', { method: 'POST' }),
+
+  authSetupFinalize: (input: { setupToken: string; code: string; pin: string }) =>
+    request<{ token: string }>('/auth/setup', { method: 'POST', body: JSON.stringify(input) }),
+
+  verifyTotp: (code: string) => request<{ token: string }>('/auth/verify-totp', { method: 'POST', body: JSON.stringify({ code }) }),
+
+  verifyPin: (pin: string) => request<{ token: string }>('/auth/verify-pin', { method: 'POST', body: JSON.stringify({ pin }) }),
+
+  authLogout: () => request<void>('/auth/logout', { method: 'POST' }),
+
+  resetTotpInit: () => request<{ setupToken: string; secret: string; otpauth: string; qrDataUrl: string }>('/auth/reset-totp/init', { method: 'POST' }),
+
+  resetTotp: (input: { setupToken: string; code: string }) =>
+    request<{ ok: boolean }>('/auth/reset-totp', { method: 'POST', body: JSON.stringify(input) }),
+
+  changePin: (input: { currentPin: string; newPin: string }) =>
+    request<{ ok: boolean }>('/auth/change-pin', { method: 'POST', body: JSON.stringify(input) }),
 };
 
 // Fixed class periods, mirroring server/src/slots.ts

@@ -9,7 +9,7 @@ import {
 } from '@dnd-kit/core';
 import { useDndSensors } from '@/hooks/useDndSensors';
 import { ArrowLeftRight, RefreshCw } from 'lucide-react';
-import { timetableSlots, noonBreak } from '@/lib/api';
+import { timetableSlots, noonBreak, LogStatus } from '@/lib/api';
 import {
   buildGrid,
   DAY_LABELS,
@@ -66,7 +66,7 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
   const grid = useMemo(() => buildGrid(slots, swapMap), [slots, swapMap]);
   const paletteCourses = useMemo(() => unplacedCourses(courses, slots, swapMap), [courses, slots, swapMap]);
   const todayStatusMap = useMemo(() => {
-    const map = new Map<string, 'ATTENDED' | 'SKIPPED' | 'CANCELLED'>();
+    const map = new Map<string, 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | 'GHOST'>();
     for (const t of today) {
       if (t.logStatus) map.set(`${t.dayOfWeek}:${t.startTime}`, t.logStatus);
     }
@@ -171,7 +171,7 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
   const weekStart = mondayOf(new Date());
 
   const handlers = {
-    onLog: (cell: GridCell, status: 'ATTENDED' | 'SKIPPED' | 'CANCELLED') => {
+    onLog: (cell: GridCell, status: LogStatus) => {
       const course = cell.cell?.course;
       if (course) void logForCell(course.id, cell.slotIndex, status);
     },
@@ -312,7 +312,7 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
 }
 
 interface CellHandlers {
-  onLog: (cell: GridCell, status: 'ATTENDED' | 'SKIPPED' | 'CANCELLED') => void;
+  onLog: (cell: GridCell, status: 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | 'GHOST') => void;
   onToggleCancelClass: (cell: GridCell) => void;
   onEditVenue: (cell: GridCell) => void;
   onRemove: (cell: GridCell) => void;
@@ -322,7 +322,7 @@ interface SlotRowGroupProps {
   defIndex: number;
   cells: GridCell[];
   todayDow: number;
-  todayStatusMap: Map<string, 'ATTENDED' | 'SKIPPED' | 'CANCELLED'>;
+  todayStatusMap: Map<string, 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | 'GHOST'>;
   openMenu: string | null;
   setOpenMenu: (id: string | null) => void;
   dragActive: boolean;
@@ -444,7 +444,7 @@ interface MobileBoardProps {
   paletteCourses: TimetableController['courses'];
   dragActive: boolean;
   todayDow: number;
-  todayStatusMap: Map<string, 'ATTENDED' | 'SKIPPED' | 'CANCELLED'>;
+  todayStatusMap: Map<string, 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | 'GHOST'>;
   openMenu: string | null;
   setOpenMenu: (id: string | null) => void;
   handlers: CellHandlers;
@@ -506,7 +506,7 @@ interface MobileSlotRowProps {
   defIndex: number;
   cell: GridCell;
   isToday: boolean;
-  todayStatusMap: Map<string, 'ATTENDED' | 'SKIPPED' | 'CANCELLED'>;
+  todayStatusMap: Map<string, 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | 'GHOST'>;
   openMenu: string | null;
   setOpenMenu: (id: string | null) => void;
   dragActive: boolean;

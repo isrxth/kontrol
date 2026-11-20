@@ -1,4 +1,5 @@
-import { ShieldCheck, CheckCircle, Calendar } from 'lucide-react';
+import { ShieldCheck, CheckCircle, Ghost, Calendar } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { CourseStats, LogStatus } from '@/lib/api';
 
 interface QuickActionsRowProps {
@@ -8,47 +9,64 @@ interface QuickActionsRowProps {
   onAddTask?: () => void;
 }
 
+const ACTIONS: {
+  id: LogStatus | 'timetable';
+  icon: LucideIcon;
+  label: string;
+  iconColor: string;
+  activeBorder: string;
+}[] = [
+  {
+    id: 'SKIPPED',
+    icon: ShieldCheck,
+    label: 'Skip',
+    iconColor: 'text-rose-400',
+    activeBorder: 'hover:border-rose-500/40',
+  },
+  {
+    id: 'ATTENDED',
+    icon: CheckCircle,
+    label: 'Attend',
+    iconColor: 'text-emerald-400',
+    activeBorder: 'hover:border-emerald-500/40',
+  },
+  {
+    id: 'GHOST',
+    icon: Ghost,
+    label: 'Ghost',
+    iconColor: 'text-violet-400',
+    activeBorder: 'hover:border-violet-500/40',
+  },
+  {
+    id: 'timetable',
+    icon: Calendar,
+    label: 'Timetable',
+    iconColor: 'text-indigo-400',
+    activeBorder: 'hover:border-indigo-500/40',
+  },
+];
+
 export function QuickActionsRow({
   selectedCourse,
   onLogAttendance,
   onOpenTimetable,
 }: QuickActionsRowProps) {
-  const actions = [
-    {
-      icon: ShieldCheck,
-      label: 'Log Skip',
-      iconColor: 'text-rose-400',
-      activeBorder: 'hover:border-rose-500/40',
-      onClick: () => selectedCourse && onLogAttendance(selectedCourse.id, 'SKIPPED'),
-      disabled: !selectedCourse,
-    },
-    {
-      icon: CheckCircle,
-      label: 'Attended',
-      iconColor: 'text-emerald-400',
-      activeBorder: 'hover:border-emerald-500/40',
-      onClick: () => selectedCourse && onLogAttendance(selectedCourse.id, 'ATTENDED'),
-      disabled: !selectedCourse,
-    },
-    {
-      icon: Calendar,
-      label: 'Timetable',
-      iconColor: 'text-indigo-400',
-      activeBorder: 'hover:border-indigo-500/40',
-      onClick: onOpenTimetable,
-      disabled: false,
-    },
-  ];
-
   return (
-    <div className="grid grid-cols-3 gap-3 px-4 py-2">
-      {actions.map((action) => {
+    <div className="grid grid-cols-4 gap-3 px-4 py-2">
+      {ACTIONS.map((action) => {
         const Icon = action.icon;
+        const isLog = action.id !== 'timetable';
         return (
           <button
-            key={action.label}
-            onClick={action.onClick}
-            disabled={action.disabled}
+            key={action.id}
+            onClick={() => {
+              if (isLog) {
+                selectedCourse && onLogAttendance(selectedCourse.id, action.id as LogStatus);
+              } else {
+                onOpenTimetable();
+              }
+            }}
+            disabled={!selectedCourse && isLog}
             className="flex flex-col items-center gap-2
               active:scale-[0.94] transition-all duration-150
               disabled:opacity-40"

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useDroppable } from '@dnd-kit/core';
-import { ArrowLeftRight, Ban, CalendarX2, CheckCircle2, MapPin, Plus, Trash2, XCircle } from 'lucide-react';
+import { ArrowLeftRight, Ban, CalendarX2, CheckCircle2, MapPin, Plus, Trash2, XCircle, Ghost } from 'lucide-react';
 import type { GridCell } from '@/lib/timetable';
 import { cellDroppableId, DAY_SHORT_LABELS } from '@/lib/timetable';
 import type { LogStatus } from '@/lib/api';
@@ -9,7 +9,7 @@ import { ModuleChip } from './ModuleChip';
 interface SlotCellProps {
   cell: GridCell;
   isToday: boolean;
-  logStatus: 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | null;
+  logStatus: 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | 'GHOST' | null;
   dragActive: boolean;
   menuOpen: boolean;
   onToggleMenu: () => void;
@@ -126,6 +126,7 @@ function CellMenu({ cell, isToday, onLog, onToggleCancelClass, onEditVenue, onRe
         <>
           <MenuItem icon={<CheckCircle2 size={13} className="text-emerald-400" />} label="Mark attended" onClick={() => onLog('ATTENDED')} />
           <MenuItem icon={<XCircle size={13} className="text-rose-400" />} label="Mark skipped" onClick={() => onLog('SKIPPED')} />
+          <MenuItem icon={<Ghost size={13} className="text-violet-400" />} label="Mark ghosted" onClick={() => onLog('GHOST')} />
           <MenuDivider />
         </>
       )}

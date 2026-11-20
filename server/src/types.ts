@@ -10,6 +10,7 @@ export interface CourseRow {
 
 export interface CourseStatsRow extends CourseRow {
   attended_count: number;
+  ghost_count: number;
   skipped_count: number;
   cancelled_count: number;
 }
@@ -21,7 +22,7 @@ export interface RiskInfo {
   attendancePercentage: number;
 }
 
-export function calculateRisk(totalLectures: number, requiredRatio: number, skippedCount: number, attendedCount: number): RiskInfo {
+export function calculateRisk(totalLectures: number, requiredRatio: number, skippedCount: number, attendedCount: number, ghostCount = 0): RiskInfo {
   const maxSafeSkips = Math.floor(totalLectures * (1 - requiredRatio));
   const remainingSkips = maxSafeSkips - skippedCount;
 
@@ -29,9 +30,12 @@ export function calculateRisk(totalLectures: number, requiredRatio: number, skip
   if (remainingSkips < 0) riskLevel = 'DANGER';
   else if (remainingSkips <= 1) riskLevel = 'WARNING';
 
-  const sessionsHeld = attendedCount + skippedCount;
+  // Ghosted sessions count as attended for eligibility/percentage, but are tracked
+  // separately so the user can tell real attendance from ghosted classes.
+  const effectiveAttended = attendedCount + ghostCount;
+  const sessionsHeld = effectiveAttended + skippedCount;
   const attendancePercentage = sessionsHeld > 0
-    ? Math.round((attendedCount / sessionsHeld) * 100)
+    ? Math.round((effectiveAttended / sessionsHeld) * 100)
     : 100;
 
   return { maxSafeSkips, remainingSkips, riskLevel, attendancePercentage };
@@ -65,7 +69,7 @@ export interface AttendanceLogRow {
   course_id: string;
   log_date: string;
   slot_time: string | null;
-  status: 'ATTENDED' | 'SKIPPED' | 'CANCELLED';
+  status: 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | 'GHOST';
   reason: string | null;
   created_at: string;
 }

@@ -8,7 +8,7 @@ interface ModuleChipProps {
   course: TimetableCourseInfo;
   isCancelled: boolean;
   isToday: boolean;
-  logStatus: 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | null;
+  logStatus: 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | 'GHOST' | null;
   onOpenMenu: () => void;
   menuOpen: boolean;
 }
@@ -70,14 +70,15 @@ export function ModuleChip({ slot, course, isCancelled, isToday, logStatus, onOp
   );
 }
 
-export function LogBadge({ status }: { status: 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | null }) {
+export function LogBadge({ status }: { status: 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | 'GHOST' | null }) {
   if (!status) return null;
   const styles = {
     ATTENDED: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+    GHOST: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
     SKIPPED: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
     CANCELLED: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
   } as const;
-  const labels = { ATTENDED: 'Attended', SKIPPED: 'Skipped', CANCELLED: 'Off' } as const;
+  const labels = { ATTENDED: 'Attended', GHOST: 'Ghosted', SKIPPED: 'Skipped', CANCELLED: 'Off' } as const;
   return (
     <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold ${styles[status]}`}>
       {labels[status]}

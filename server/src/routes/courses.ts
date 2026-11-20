@@ -19,6 +19,7 @@ router.get('/stats', async (_req, res, next) => {
     const statsRows = await query<CourseStatsRow>(`
       SELECT c.*,
              COUNT(l.*) FILTER (WHERE l.status = 'ATTENDED')::int  AS attended_count,
+             COUNT(l.*) FILTER (WHERE l.status = 'GHOST')::int     AS ghost_count,
              COUNT(l.*) FILTER (WHERE l.status = 'SKIPPED')::int   AS skipped_count,
              COUNT(l.*) FILTER (WHERE l.status = 'CANCELLED')::int AS cancelled_count
       FROM courses c
@@ -33,6 +34,7 @@ router.get('/stats', async (_req, res, next) => {
         row.required_ratio,
         row.skipped_count,
         row.attended_count,
+        row.ghost_count,
       );
       return {
         id: row.id,
@@ -42,6 +44,7 @@ router.get('/stats', async (_req, res, next) => {
         totalLectures: row.total_lectures,
         requiredRatio: row.required_ratio,
         attendedCount: row.attended_count,
+        ghostCount: row.ghost_count,
         skippedCount: row.skipped_count,
         cancelledCount: row.cancelled_count,
         ...risk,

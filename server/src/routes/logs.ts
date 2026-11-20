@@ -2,12 +2,12 @@ import { Router, json } from 'express';
 import { query } from '../db.js';
 import type { AttendanceLogRow, CourseRow } from '../types.js';
 import { DATE_PATTERN, TIME_PATTERN, normalizeTime } from '../slots.js';
-import { dayOfWeekOf, mondayOf, parseDate, dateOnly } from '../dates.js';
+import { dayOfWeekOf, mondayOf, parseDate, dateOnly, todayLocal, isValidDateOnly } from '../dates.js';
 
 const router = Router();
 router.use(json());
 
-const STATUSES = ['ATTENDED', 'SKIPPED', 'CANCELLED'] as const;
+const STATUSES = ['ATTENDED', 'SKIPPED', 'CANCELLED', 'GHOST'] as const;
 type LogStatus = (typeof STATUSES)[number];
 
 function toLogDto(row: AttendanceLogRow) {
@@ -46,7 +46,9 @@ router.post('/:id/logs', async (req, res, next) => {
     if (!status || !STATUSES.includes(status as LogStatus)) {
       return res.status(400).json({ error: `status must be one of ${STATUSES.join(', ')}` });
     }
-    const date = logDate && DATE_PATTERN.test(logDate) ? logDate : new Date().toISOString().slice(0, 10);
+    const date = logDate && DATE_PATTERN.test(logDate) && isValidDateOnly(logDate)
+      ? logDate
+      : todayLocal();
 
     let slot: string | null = null;
     if (slotTime !== undefined && slotTime !== null) {

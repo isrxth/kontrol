@@ -360,7 +360,7 @@ router.get('/today', async (req, res, next) => {
          WHERE s.week_start = $1`,
         [week],
       ),
-      query<{ course_id: string; slot_time: string; status: 'ATTENDED' | 'SKIPPED' | 'CANCELLED' }>(
+      query<{ course_id: string; slot_time: string; status: 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | 'GHOST' }>(
         `SELECT course_id, slot_time::text AS slot_time, status
          FROM attendance_logs
          WHERE log_date = $1 AND slot_time IS NOT NULL`,
@@ -387,7 +387,7 @@ router.get('/today', async (req, res, next) => {
       });
     }
 
-    const logStatus = new Map<string, 'ATTENDED' | 'SKIPPED' | 'CANCELLED'>();
+    const logStatus = new Map<string, 'ATTENDED' | 'SKIPPED' | 'CANCELLED' | 'GHOST'>();
     for (const l of logRows) {
       logStatus.set(`${l.course_id}|${normalizeTime(l.slot_time)}`, l.status);
     }
