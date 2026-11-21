@@ -23,6 +23,9 @@ importers:
       '@capacitor/core':
         specifier: ^8.6.0
         version: 8.6.2
+      '@capacitor/local-notifications':
+        specifier: ^8.3.1
+        version: 8.3.1(@capacitor/core@8.6.2)
       '@capgo/capacitor-native-biometric':
         specifier: ^8.9.3
         version: 8.9.3(@capacitor/core@8.6.2)
@@ -357,6 +360,11 @@ packages:
 
   '@capacitor/core@8.6.2':
     resolution: {integrity: sha512-UEb9crRuqEAe2Iu2eGOEuQ8rLQxpwg7ZZIpl17UJoytEpnV1e4oXXW0K7yYS2NsCOGmJjyLeKjNlgG7tkAoX8g==}
+
+  '@capacitor/local-notifications@8.3.1':
+    resolution: {integrity: sha512-F7zu/+p/mIR958YP4axOkeI5hBKRaXDyYjbNPrAil2wWfd7OxScPSTvP9t85NpQ0eULVRu0/sntoxOg6ck477A==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
 
   '@capgo/capacitor-native-biometric@8.9.3':
     resolution: {integrity: sha512-bH3ZupGr3ocetX546rBvYSuccWy2P45kWu+RXVPXBVpXidQVF/iX8mB0pzPzDCJhEa7XZBi8qKyoaowpmb3sbw==}
@@ -3471,6 +3479,10 @@ snapshots:
   '@capacitor/core@8.6.2':
     dependencies:
       tslib: 2.9.1
+
+  '@capacitor/local-notifications@8.3.1(@capacitor/core@8.6.2)':
+    dependencies:
+      '@capacitor/core': 8.6.2
 
   '@capgo/capacitor-native-biometric@8.9.3(@capacitor/core@8.6.2)':
     dependencies:

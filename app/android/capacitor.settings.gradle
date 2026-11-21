@@ -5,5 +5,8 @@ project(':capacitor-android').projectDir = new File('../../node_modules/.pnpm/@c
 include ':capacitor-app'
 project(':capacitor-app').projectDir = new File('../../node_modules/.pnpm/@capacitor+app@8.1.2_@capacitor+core@8.6.2/node_modules/@capacitor/app/android')
 
+include ':capacitor-local-notifications'
+project(':capacitor-local-notifications').projectDir = new File('../../node_modules/.pnpm/@capacitor+local-notifications@8.3.1_@capacitor+core@8.6.2/node_modules/@capacitor/local-notifications/android')
+
 include ':capgo-capacitor-native-biometric'
 project(':capgo-capacitor-native-biometric').projectDir = new File('../../node_modules/.pnpm/@capgo+capacitor-native-bio_b5be56f9ecaf3582750fbbfd9600ee84/node_modules/@capgo/capacitor-native-biometric/android')

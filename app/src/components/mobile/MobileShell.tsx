@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { ReactiveBackground } from '@/components/ui/ReactiveBackground';
@@ -7,6 +7,8 @@ import { GlassButton } from '@/components/glassyui/glass-button';
 import { TimetableBoard } from '@/components/timetable/TimetableBoard';
 import { BuildVault } from '@/components/vault/BuildVault';
 import { GlassPanel } from '@/components/glassyui/glass-panel';
+import { SettingsModal } from '@/components/SettingsModal';
+import { syncAllNotifications } from '@/lib/notifications';
 
 import { MobileTopBar } from './MobileTopBar';
 import { MobileHeroMetric } from './MobileHeroMetric';
@@ -57,7 +59,14 @@ export function MobileShell({
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const selectedCourse = courses.find((c) => c.id === selectedCourseId) ?? courses[0] ?? null;
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (courses.length > 0) {
+      void syncAllNotifications(courses, timetable.slots, activitiesCtrl.activities);
+    }
+  }, [courses, timetable.slots, activitiesCtrl.activities]);
   const [form, setForm] = useState({ code: '', name: '', totalLectures: '', requiredPercent: '80' });
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -106,7 +115,7 @@ export function MobileShell({
       />
 
       {/* Top bar */}
-      <MobileTopBar onSettings={() => {}} />
+      <MobileTopBar onSettings={() => setShowSettingsModal(true)} />
 
       {/* Tab content */}
       <div
@@ -302,6 +311,9 @@ export function MobileShell({
         </div>,
         document.body,
       )}
+
+      {/* Settings Modal */}
+      <SettingsModal open={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
     </div>
   );
 }

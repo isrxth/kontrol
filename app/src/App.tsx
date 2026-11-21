@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ReactiveBackground } from './components/ui/ReactiveBackground';
 import { GlassHeader } from '@/components/glassyui/glass-header';
 import { GlassTabs, GlassTabsList, GlassTabsTrigger } from '@/components/glassyui/glass-tabs';
@@ -15,6 +15,8 @@ import { TimetableBoard } from '@/components/timetable/TimetableBoard';
 import { BuildVault } from '@/components/vault/BuildVault';
 import { MobileShell } from '@/components/mobile/MobileShell';
 import { AuthGate } from '@/components/AuthGate';
+import { SettingsModal } from '@/components/SettingsModal';
+import { syncAllNotifications } from '@/lib/notifications';
 import { bucketOf } from '@/components/vault/vault';
 import type { CourseStats, TodaySlot } from '@/lib/api';
 import { ShieldCheck, Settings, CheckCircle, AlertTriangle, ShieldAlert, Plus, X, Zap, Clock, BookOpen, CalendarCheck, LayoutDashboard, Calendar, FolderGit2, Bell, Ghost } from 'lucide-react';
@@ -45,7 +47,14 @@ function MainApp() {
   const projectsCtrl = useProjects();
   const activitiesCtrl = useActivities();
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (courses.length > 0) {
+      void syncAllNotifications(courses, timetable.slots, activitiesCtrl.activities);
+    }
+  }, [courses, timetable.slots, activitiesCtrl.activities]);
 
   const isMobile = useIsMobile();
 
@@ -134,7 +143,11 @@ function MainApp() {
           </div>
         }
         actions={
-          <button className="p-2.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-2xl border border-transparent hover:border-white/15 transition-all">
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            aria-label="Settings"
+            className="p-2.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-2xl border border-transparent hover:border-white/15 transition-all"
+          >
             <Settings size={18} />
           </button>
         }
@@ -459,13 +472,16 @@ function MainApp() {
           </GlassPanel>
         </div>
       )}
+
+      {/* Settings Modal */}
+      <SettingsModal open={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
     </div>
   );
 }
 
 function CourseCard({ course, onSkip, onAttended, onGhost }: { course: CourseStats; onSkip: () => void; onAttended: () => void; onGhost: () => void }) {
   return (
-    <GlassPanel className="p-6 flex flex-col justify-between border-white/15 bg-slate-900/40">
+    <GlassPanel className="p-5 flex flex-col justify-between border-white/15 bg-slate-900/40">
       <div className="flex justify-between items-start">
         <div>
           <span className="text-xs font-mono text-slate-400">{course.code}</span>
@@ -479,9 +495,9 @@ function CourseCard({ course, onSkip, onAttended, onGhost }: { course: CourseSta
         {course.riskLevel === 'DANGER' && <ShieldAlert size={16} className="text-rose-400" />}
       </div>
 
-      <div className="mt-6 flex items-end justify-between">
-        <div>
-          <p className="text-xs text-slate-400">Remaining Skips</p>
+      <div className="mt-5">
+        <p className="text-xs text-slate-400">Remaining Skips</p>
+        <div className="flex items-baseline justify-between mt-0.5">
           <p className={`text-2xl font-bold tabular-nums ${course.riskLevel === 'SAFE' ? 'text-emerald-400' :
             course.riskLevel === 'WARNING' ? 'text-amber-400' : 'text-rose-400'
             }`}>
@@ -489,17 +505,18 @@ function CourseCard({ course, onSkip, onAttended, onGhost }: { course: CourseSta
           </p>
           <p className="text-[10px] text-slate-500 tabular-nums">{course.attendancePercentage}% current</p>
         </div>
-        <div className="flex gap-2">
-          <GlassButton onClick={onAttended} size="sm" variant="primary">
-            <CheckCircle size={13} className="mr-1.5" /> Attended
-          </GlassButton>
-          <GlassButton onClick={onSkip} size="sm">
-            <ShieldCheck size={13} className="mr-1.5" /> Skip
-          </GlassButton>
-          <GlassButton onClick={onGhost} size="sm">
-            <Ghost size={13} className="mr-1.5 text-violet-400" /> Ghost
-          </GlassButton>
-        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-1.5 pt-3 mt-4 border-t border-white/[0.07]">
+        <GlassButton onClick={onAttended} size="sm" variant="primary" className="w-full justify-center px-1 text-[11px]">
+          <CheckCircle size={12} className="mr-1 text-emerald-400 shrink-0" /> Attend
+        </GlassButton>
+        <GlassButton onClick={onSkip} size="sm" className="w-full justify-center px-1 text-[11px] text-rose-300 hover:text-rose-200 border-rose-500/20">
+          <ShieldCheck size={12} className="mr-1 text-rose-400 shrink-0" /> Skip
+        </GlassButton>
+        <GlassButton onClick={onGhost} size="sm" className="w-full justify-center px-1 text-[11px] text-violet-300 hover:text-violet-200 border-violet-500/20">
+          <Ghost size={12} className="mr-1 text-violet-400 shrink-0" /> Ghost
+        </GlassButton>
       </div>
     </GlassPanel>
   );
