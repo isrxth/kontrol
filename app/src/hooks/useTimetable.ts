@@ -9,6 +9,7 @@ import {
   type TodaySlot,
 } from '@/lib/api';
 import { buildSwapMap } from '@/lib/timetable';
+import { CACHE_KEYS, getCached } from '@/lib/offline-store';
 
 export interface UseTimetableOptions {
   /** Called after any attendance log so parent stats can refresh. */
@@ -16,10 +17,18 @@ export interface UseTimetableOptions {
 }
 
 export function useTimetable(courses: CourseStats[], options: UseTimetableOptions = {}) {
-  const [slots, setSlots] = useState<TimetableSlot[]>([]);
-  const [swaps, setSwaps] = useState<TimetableSwap[]>([]);
-  const [today, setToday] = useState<TodaySlot[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [slots, setSlots] = useState<TimetableSlot[]>(
+    () => getCached<TimetableSlot[]>(CACHE_KEYS.timetable) ?? []
+  );
+  const [swaps, setSwaps] = useState<TimetableSwap[]>(
+    () => getCached<TimetableSwap[]>(CACHE_KEYS.swaps) ?? []
+  );
+  const [today, setToday] = useState<TodaySlot[]>(
+    () => getCached<TodaySlot[]>(CACHE_KEYS.today) ?? []
+  );
+  const [loading, setLoading] = useState(
+    () => !getCached<TimetableSlot[]>(CACHE_KEYS.timetable)
+  );
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

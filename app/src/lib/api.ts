@@ -1,5 +1,12 @@
 import { Capacitor } from '@capacitor/core';
 import { todayLocal } from './dates';
+import {
+  CACHE_KEYS,
+  getCached,
+  setCached,
+  enqueueOutbox,
+  applyOptimisticAttendance,
+} from './offline-store';
 
 export interface CourseStats {
   id: string;
@@ -156,9 +163,23 @@ export interface NewActivityInput {
 }
 
 const isNative = typeof window !== 'undefined' && Capacitor.isNativePlatform();
-export const BASE = (isNative ? import.meta.env.VITE_API_URL : undefined) || '/api';
+export const BASE = isNative
+  ? (import.meta.env.VITE_API_URL || 'https://kontrol-omega.vercel.app/api')
+  : (import.meta.env.VITE_API_URL || '/api');
 
 let authToken: string | null = null;
+
+function mirrorAuthToNative(token: string | null) {
+  if (typeof window === 'undefined') return;
+  try {
+    const bridge = (window as unknown as { KontrolNativeBridge?: { syncAuth?: (t: string, u: string) => void } }).KontrolNativeBridge;
+    if (bridge?.syncAuth) {
+      bridge.syncAuth(token || '', BASE);
+    }
+  } catch {
+    // ignore
+  }
+}
 
 export function setAuthToken(token: string | null) {
   authToken = token;
@@ -168,39 +189,104 @@ export function setAuthToken(token: string | null) {
     } else {
       localStorage.removeItem('kontrol_token');
     }
+    mirrorAuthToNative(token);
   }
 }
 
 export function getAuthToken(): string | null {
   if (authToken) return authToken;
   if (typeof window !== 'undefined') {
-    return localStorage.getItem('kontrol_token');
+    const stored = localStorage.getItem('kontrol_token');
+    if (stored) {
+      mirrorAuthToNative(stored);
+      return stored;
+    }
   }
   return null;
 }
 
+function getCacheKeyForPath(path: string): string | null {
+  if (path === '/courses/stats') return CACHE_KEYS.courses;
+  if (path === '/timetable') return CACHE_KEYS.timetable;
+  if (path === '/timetable/swaps') return CACHE_KEYS.swaps;
+  if (path === '/timetable/today') return CACHE_KEYS.today;
+  if (path === '/projects') return CACHE_KEYS.projects;
+  if (path === '/activities') return CACHE_KEYS.activities;
+  return null;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const cacheKey = method === 'GET' ? getCacheKeyForPath(path) : null;
+  const isOnline = typeof navigator === 'undefined' || navigator.onLine;
+
   const headers = new Headers({ 'Content-Type': 'application/json', ...(init?.headers ?? {}) });
   const token = getAuthToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers,
-    credentials: 'include',
-  });
-  if (res.status === 204) return undefined as T;
-  if (res.status === 401) {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('kontrol_token');
-      window.dispatchEvent(new Event('kontrol:lock'));
+  try {
+    if (!isOnline) {
+      throw new TypeError('Failed to fetch (offline)');
     }
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? 'Unauthorized');
+
+    const res = await fetch(`${BASE}${path}`, {
+      ...init,
+      headers,
+      credentials: 'include',
+    });
+    if (res.status === 204) return undefined as T;
+    if (res.status === 401) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('kontrol_token');
+        window.dispatchEvent(new Event('kontrol:lock'));
+      }
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? 'Unauthorized');
+    }
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
+
+    // Stale-While-Revalidate: save latest successful GET
+    if (cacheKey) {
+      setCached(cacheKey, body);
+    }
+    return body as T;
+  } catch (err) {
+    const isNetworkError =
+      err instanceof TypeError ||
+      !isOnline ||
+      (err instanceof Error && /network|fetch|offline/i.test(err.message));
+
+    if (isNetworkError) {
+      // 1. If GET, return cached snapshot if available
+      if (method === 'GET' && cacheKey) {
+        const cached = getCached<T>(cacheKey);
+        if (cached) return cached;
+      }
+
+      // 2. If Mutation, enqueue into offline outbox and apply optimistic update
+      if (method !== 'GET') {
+        const parsedBody = init?.body ? JSON.parse(init.body as string) : undefined;
+        enqueueOutbox({
+          method,
+          path,
+          body: parsedBody,
+        });
+
+        const logMatch = path.match(/^\/courses\/([^/]+)\/logs$/);
+        if (logMatch && parsedBody?.status) {
+          applyOptimisticAttendance(logMatch[1], parsedBody.status);
+        }
+
+        return {
+          id: `opt_${Date.now()}`,
+          ...(typeof parsedBody === 'object' ? parsedBody : {}),
+        } as T;
+      }
+    }
+
+    throw err;
   }
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
-  return body as T;
 }
 
 export const api = {

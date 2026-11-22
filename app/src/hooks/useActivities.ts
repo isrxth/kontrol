@@ -1,15 +1,26 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type Activity, type NewActivityInput } from '@/lib/api';
+import { CACHE_KEYS, getCached } from '@/lib/offline-store';
+import { hapticSuccess } from '@/lib/haptics';
 
 export function useActivities() {
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [activities, setActivities] = useState<Activity[]>(
+    () => getCached<Activity[]>(CACHE_KEYS.activities) ?? []
+  );
+  const [loading, setLoading] = useState(
+    () => !getCached<Activity[]>(CACHE_KEYS.activities)
+  );
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const refetch = useCallback(async () => {
-    setActivities(await api.getActivities());
+    const data = await api.getActivities();
+    setActivities(data);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('kontrol:activities-updated', { detail: { activities: data } }));
+    }
+    return data;
   }, []);
 
   useEffect(() => {
@@ -21,6 +32,9 @@ export function useActivities() {
         if (!cancelled) {
           setActivities(data);
           setError(null);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('kontrol:activities-updated', { detail: { activities: data } }));
+          }
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load activities');
@@ -59,8 +73,12 @@ export function useActivities() {
   );
 
   const updateActivity = useCallback(
-    (id: string, input: Partial<NewActivityInput> & { isDone?: boolean }) =>
-      runAction(() => api.updateActivity(id, input)),
+    async (id: string, input: Partial<NewActivityInput> & { isDone?: boolean }) => {
+      if (input.isDone) {
+        void hapticSuccess();
+      }
+      return runAction(() => api.updateActivity(id, input));
+    },
     [runAction],
   );
 

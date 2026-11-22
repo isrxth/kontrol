@@ -1,5 +1,7 @@
+import { memo } from 'react';
 import { ShieldCheck, CheckCircle, Calendar, Ghost } from 'lucide-react';
 import type { CourseStats, LogStatus } from '@/lib/api';
+import { hapticAction, hapticTap, hapticWarning } from '@/lib/haptics';
 
 interface QuickActionsRowProps {
   selectedCourse: CourseStats | null;
@@ -8,7 +10,7 @@ interface QuickActionsRowProps {
   onAddTask?: () => void;
 }
 
-export function QuickActionsRow({
+export const QuickActionsRow = memo(function QuickActionsRow({
   selectedCourse,
   onLogAttendance,
   onOpenTimetable,
@@ -19,7 +21,15 @@ export function QuickActionsRow({
       label: 'Log Skip',
       iconColor: 'text-rose-400',
       activeBorder: 'hover:border-rose-500/40',
-      onClick: () => selectedCourse && onLogAttendance(selectedCourse.id, 'SKIPPED'),
+      onClick: () => {
+        if (!selectedCourse) return;
+        if (selectedCourse.remainingSkips <= 1) {
+          void hapticWarning();
+        } else {
+          void hapticAction();
+        }
+        onLogAttendance(selectedCourse.id, 'SKIPPED');
+      },
       disabled: !selectedCourse,
     },
     {
@@ -27,7 +37,11 @@ export function QuickActionsRow({
       label: 'Attended',
       iconColor: 'text-emerald-400',
       activeBorder: 'hover:border-emerald-500/40',
-      onClick: () => selectedCourse && onLogAttendance(selectedCourse.id, 'ATTENDED'),
+      onClick: () => {
+        if (!selectedCourse) return;
+        void hapticAction();
+        onLogAttendance(selectedCourse.id, 'ATTENDED');
+      },
       disabled: !selectedCourse,
     },
     {
@@ -35,7 +49,11 @@ export function QuickActionsRow({
       label: 'Ghost',
       iconColor: 'text-violet-400',
       activeBorder: 'hover:border-violet-500/40',
-      onClick: () => selectedCourse && onLogAttendance(selectedCourse.id, 'GHOST'),
+      onClick: () => {
+        if (!selectedCourse) return;
+        void hapticAction();
+        onLogAttendance(selectedCourse.id, 'GHOST');
+      },
       disabled: !selectedCourse,
     },
     {
@@ -43,7 +61,10 @@ export function QuickActionsRow({
       label: 'Timetable',
       iconColor: 'text-indigo-400',
       activeBorder: 'hover:border-indigo-500/40',
-      onClick: onOpenTimetable,
+      onClick: () => {
+        void hapticTap();
+        onOpenTimetable();
+      },
       disabled: false,
     },
   ];
@@ -77,4 +98,4 @@ export function QuickActionsRow({
       })}
     </div>
   );
-}
+});

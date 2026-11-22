@@ -1,5 +1,7 @@
+import { memo } from 'react';
 import { BookOpen, Zap, CalendarCheck, Star } from 'lucide-react';
 import type { Activity, ActivityType } from '@/lib/api';
+import { hapticTap } from '@/lib/haptics';
 
 interface UpNextListProps {
   activities: Activity[];
@@ -28,7 +30,7 @@ const TYPE_BG: Record<ActivityType, string> = {
   OTHER:      'bg-white/[0.07]',
 };
 
-export function UpNextList({ activities, onViewAll }: UpNextListProps) {
+export const UpNextList = memo(function UpNextList({ activities, onViewAll }: UpNextListProps) {
   const upcoming = activities
     .filter((a) => !a.isDone)
     .sort((a, b) => {
@@ -40,11 +42,14 @@ export function UpNextList({ activities, onViewAll }: UpNextListProps) {
     .slice(0, 5);
 
   return (
-    <div className="mx-4 mt-3 rounded-[24px] bg-[#161b2e]/75 border border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] p-4">
+    <div className="mx-4 mt-3 rounded-[24px] bg-[#161b2e]/85 border border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] p-4">
       <div className="flex items-center justify-between mb-3">
         <span className="text-[13px] font-bold text-white">Up Next</span>
         <button
-          onClick={onViewAll}
+          onClick={() => {
+            void hapticTap();
+            onViewAll?.();
+          }}
           className="text-[11px] text-indigo-400 font-semibold
             px-3 py-1 rounded-full bg-indigo-500/15 border border-indigo-500/20
             active:scale-95 transition-transform duration-150"
@@ -93,4 +98,4 @@ export function UpNextList({ activities, onViewAll }: UpNextListProps) {
       )}
     </div>
   );
-}
+});

@@ -7,6 +7,7 @@ import { ShieldAlert, ShieldCheck, WifiOff, RefreshCw, Fingerprint } from 'lucid
 import { setAuthToken, api, BASE } from '@/lib/api';
 import { GlassPanel } from '@/components/glassyui/glass-panel';
 import { GlassButton } from '@/components/glassyui/glass-button';
+import { hapticSuccess, hapticWarning } from '@/lib/haptics';
 
 interface AuthContextValue {
   authenticated: boolean;
@@ -77,6 +78,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         if (st.authenticated) {
           setStatus('authenticated');
           setError(null);
+          void hapticSuccess();
+          if (typeof window !== 'undefined') window.dispatchEvent(new Event('kontrol:unlock'));
           return;
         }
       }
@@ -111,15 +114,18 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const checkStatus = useCallback(async () => {
     try {
       const data = await api.authStatus();
-      if (data.authenticated) {
-        setStatus('authenticated');
-      } else if (!data.initialized) {
+      if (!data.initialized) {
         setStatus('setup');
-      } else {
+      } else if (isNative) {
+        // AppLock: Android native cold start always requires unlock
         setStatus('locked');
-        if (isNative && localStorage.getItem('kontrol_biometric_enabled') === 'true') {
+        if (localStorage.getItem('kontrol_biometric_enabled') === 'true') {
           void attemptBiometricUnlock();
         }
+      } else if (data.authenticated) {
+        setStatus('authenticated');
+      } else {
+        setStatus('locked');
       }
       setError(null);
     } catch (err) {
@@ -148,6 +154,15 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
     let mounted = true;
     let subs: { remove: () => void } | null = null;
+
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        setStatus('locked');
+      } else if (localStorage.getItem('kontrol_biometric_enabled') === 'true') {
+        void attemptBiometricUnlock();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     const setupListener = async () => {
       try {
@@ -178,6 +193,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
     return () => {
       mounted = false;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       subs?.remove();
     };
   }, [attemptBiometricUnlock]);
@@ -242,6 +258,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const handleVerifyTotp = async () => {
     if (!/^\d{6}$/.test(totpCode)) {
       setError('Enter a valid 6-digit code.');
+      void hapticWarning();
       return;
     }
     setLoading(true);
@@ -251,8 +268,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       await saveToken(data.token);
       setStatus('authenticated');
       setTotpCode('');
+      void hapticSuccess();
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('kontrol:unlock'));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Invalid code');
+      void hapticWarning();
     } finally {
       setLoading(false);
     }
@@ -261,6 +281,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const handleVerifyPin = async () => {
     if (!/^\d{6}$/.test(enteredPin)) {
       setError('Enter a valid 6-digit PIN.');
+      void hapticWarning();
       return;
     }
     setLoading(true);
@@ -270,8 +291,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       await saveToken(data.token);
       setStatus('authenticated');
       setEnteredPin('');
+      void hapticSuccess();
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('kontrol:unlock'));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Invalid PIN');
+      void hapticWarning();
     } finally {
       setLoading(false);
     }
@@ -282,12 +306,24 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return (
       <>
         {createPortal(
-          <div className="fixed inset-0 z-50 w-screen h-dvh flex items-center justify-center p-4 bg-[#070707]/95 backdrop-blur-xl">
-            {/* Loading State */}
+          <div
+            className="fixed inset-0 z-50 w-screen h-dvh flex items-center justify-center p-4 bg-[#070707]/95 backdrop-blur-xl transition-[padding] duration-200"
+            style={{ paddingBottom: 'var(--kb, 0px)' }}
+          >
+            {/* Branded Boot / Loading State */}
             {status === 'loading' && (
-              <GlassPanel className="w-full max-w-md mx-auto rounded-3xl p-6 sm:p-8 shadow-2xl border-white/10 bg-[#161b2e]/90 flex flex-col items-center justify-center gap-4 text-center">
-                <div className="w-10 h-10 rounded-full border-4 border-indigo-500/30 border-t-indigo-500 animate-[spin_1s_linear_infinite]" />
-                <p className="text-slate-300 text-sm font-medium">Initializing security…</p>
+              <GlassPanel className="w-full max-w-sm mx-auto rounded-3xl p-8 sm:p-10 shadow-2xl border-white/10 bg-[#161b2e]/90 flex flex-col items-center justify-center gap-5 text-center">
+                <div className="relative flex items-center justify-center">
+                  <div className="w-20 h-20 rounded-full border border-indigo-500/20 bg-indigo-500/10 flex items-center justify-center animate-pulse" />
+                  <div className="absolute w-14 h-14 rounded-full border-2 border-indigo-400/40 border-t-indigo-400 animate-[spin_1.5s_linear_infinite]" />
+                  <ShieldCheck size={28} className="absolute text-indigo-400" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-black text-white tracking-tight">KONTROL</h1>
+                  <p className="text-xs text-indigo-300/80 mt-1.5 font-medium animate-pulse">
+                    Verifying vault…
+                  </p>
+                </div>
               </GlassPanel>
             )}
 
@@ -325,7 +361,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
             {/* Setup Screen */}
             {status === 'setup' && (
-              <GlassPanel className="w-full max-w-md mx-auto rounded-3xl p-6 sm:p-8 shadow-2xl border-white/10 bg-[#161b2e]/90 flex flex-col items-center gap-4 text-center">
+              <GlassPanel className="w-full max-w-md mx-auto rounded-3xl p-6 sm:p-8 shadow-2xl border-white/10 bg-[#161b2e]/90 flex flex-col items-center gap-4 text-center max-h-[calc(100dvh-var(--kb,0px)-32px)] overflow-y-auto">
                 <div className="w-16 h-16 rounded-full bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center">
                   <ShieldCheck size={32} className="text-indigo-400" />
                 </div>
@@ -453,7 +489,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
             {/* Lock Screen */}
             {status === 'locked' && (
-              <GlassPanel className="w-full max-w-md mx-auto rounded-3xl p-6 sm:p-8 shadow-2xl border-white/10 bg-[#161b2e]/90 flex flex-col items-center justify-center gap-4 text-center">
+              <GlassPanel className="w-full max-w-md mx-auto rounded-3xl p-6 sm:p-8 shadow-2xl border-white/10 bg-[#161b2e]/90 flex flex-col items-center justify-center gap-4 text-center max-h-[calc(100dvh-var(--kb,0px)-32px)] overflow-y-auto">
                 <div className="w-16 h-16 rounded-full bg-slate-900/80 border border-white/10 flex items-center justify-center">
                   <ShieldAlert size={32} className="text-rose-400" />
                 </div>

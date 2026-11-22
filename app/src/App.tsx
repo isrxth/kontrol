@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense, memo } from 'react';
 import { ReactiveBackground } from './components/ui/ReactiveBackground';
 import { GlassHeader } from '@/components/glassyui/glass-header';
 import { GlassTabs, GlassTabsList, GlassTabsTrigger } from '@/components/glassyui/glass-tabs';
@@ -6,20 +6,30 @@ import { GlassSurface } from '@/components/glassyui/glass-surface';
 import { GlassPanel } from '@/components/glassyui/glass-panel';
 import { GlassButton } from '@/components/glassyui/glass-button';
 import { GlassInput } from '@/components/glassyui/glass-input';
+import { DashboardDesktopSkeleton } from '@/components/ui/GlassySkeleton';
 import { useCourses } from '@/hooks/useCourses';
 import { useTimetable } from '@/hooks/useTimetable';
 import { useProjects } from '@/hooks/useProjects';
 import { useActivities } from '@/hooks/useActivities';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { TimetableBoard } from '@/components/timetable/TimetableBoard';
-import { BuildVault } from '@/components/vault/BuildVault';
 import { MobileShell } from '@/components/mobile/MobileShell';
 import { AuthGate } from '@/components/AuthGate';
-import { SettingsModal } from '@/components/SettingsModal';
 import { syncAllNotifications } from '@/lib/notifications';
+import { useOutboxStatus } from '@/lib/offline-store';
+import { hapticAction, hapticTap, hapticWarning } from '@/lib/haptics';
 import { bucketOf } from '@/components/vault/vault';
-import type { CourseStats, TodaySlot } from '@/lib/api';
-import { ShieldCheck, Settings, CheckCircle, AlertTriangle, ShieldAlert, Plus, X, Zap, Clock, BookOpen, CalendarCheck, LayoutDashboard, Calendar, FolderGit2, Bell, Ghost } from 'lucide-react';
+import type { CourseStats, TodaySlot, Activity } from '@/lib/api';
+import { ShieldCheck, Settings, CheckCircle, AlertTriangle, ShieldAlert, Plus, X, Zap, Clock, BookOpen, CalendarCheck, LayoutDashboard, Calendar, FolderGit2, Bell, Ghost, WifiOff, RefreshCw } from 'lucide-react';
+
+const TimetableBoard = lazy(() =>
+  import('@/components/timetable/TimetableBoard').then((m) => ({ default: m.TimetableBoard }))
+);
+const BuildVault = lazy(() =>
+  import('@/components/vault/BuildVault').then((m) => ({ default: m.BuildVault }))
+);
+const SettingsModal = lazy(() =>
+  import('@/components/SettingsModal').then((m) => ({ default: m.SettingsModal }))
+);
 
 function nextLectureSlot(today: TodaySlot[]): TodaySlot | null {
   if (today.length === 0) return null;
@@ -49,12 +59,24 @@ function MainApp() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  const { isOffline, pendingCount, isSyncing, flush } = useOutboxStatus();
 
   useEffect(() => {
     if (courses.length > 0) {
       void syncAllNotifications(courses, timetable.slots, activitiesCtrl.activities);
     }
   }, [courses, timetable.slots, activitiesCtrl.activities]);
+
+  useEffect(() => {
+    const handleActivitiesUpdated = (e: Event) => {
+      const custom = e as CustomEvent<{ activities: Activity[] }>;
+      if (custom.detail?.activities && courses.length > 0) {
+        void syncAllNotifications(courses, timetable.slots, custom.detail.activities);
+      }
+    };
+    window.addEventListener('kontrol:activities-updated', handleActivitiesUpdated);
+    return () => window.removeEventListener('kontrol:activities-updated', handleActivitiesUpdated);
+  }, [courses, timetable.slots]);
 
   const isMobile = useIsMobile();
 
@@ -143,13 +165,33 @@ function MainApp() {
           </div>
         }
         actions={
-          <button
-            onClick={() => setShowSettingsModal(true)}
-            aria-label="Settings"
-            className="p-2.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-2xl border border-transparent hover:border-white/15 transition-all"
-          >
-            <Settings size={18} />
-          </button>
+          <div className="flex items-center gap-2.5">
+            {(isOffline || pendingCount > 0) && (
+              <button
+                onClick={() => void flush()}
+                title={isOffline ? 'Offline mode active' : 'Click to force sync'}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-amber-500/30 bg-amber-500/15 text-xs font-medium text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.15)] animate-pulse active:scale-95 transition-all"
+              >
+                {isSyncing ? (
+                  <RefreshCw size={12} className="animate-spin text-amber-300" />
+                ) : isOffline ? (
+                  <WifiOff size={12} className="text-amber-300" />
+                ) : (
+                  <RefreshCw size={12} className="text-amber-300" />
+                )}
+                <span>
+                  {isSyncing ? 'Syncing…' : isOffline ? (pendingCount > 0 ? `Offline • ${pendingCount}` : 'Offline') : `${pendingCount} queued`}
+                </span>
+              </button>
+            )}
+            <button
+              onClick={() => setShowSettingsModal(true)}
+              aria-label="Settings"
+              className="p-2.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-2xl border border-transparent hover:border-white/15 transition-all"
+            >
+              <Settings size={18} />
+            </button>
+          </div>
         }
       />
 
@@ -191,11 +233,9 @@ function MainApp() {
 
           {/* Bento Grid Content */}
           {activeTab === 'overview' && (
-            loading ? (
-              <GlassPanel className="p-12 text-center border-white/15 bg-slate-900/40">
-                <p className="text-slate-400 text-sm">Loading modules…</p>
-              </GlassPanel>
-            ) : error ? (
+            loading && courses.length === 0 ? (
+              <DashboardDesktopSkeleton />
+            ) : error && courses.length === 0 ? (
               <GlassPanel className="p-12 text-center border-rose-500/30 bg-slate-900/40">
                 <h3 className="text-xl font-bold text-white">API Offline</h3>
                 <p className="text-rose-400 text-sm mt-2">{error}</p>
@@ -236,13 +276,33 @@ function MainApp() {
                     </p>
                   </div>
                   <div className="flex flex-col gap-2">
-                    <GlassButton onClick={() => logAttendance(courses[0].id, 'ATTENDED')} size="sm" variant="primary">
+                    <GlassButton
+                      onClick={() => {
+                        void hapticAction();
+                        void logAttendance(courses[0].id, 'ATTENDED');
+                      }}
+                      size="sm"
+                      variant="primary"
+                    >
                       <CheckCircle size={13} className="mr-1.5" /> Attended
                     </GlassButton>
-                    <GlassButton onClick={() => logAttendance(courses[0].id, 'SKIPPED')} size="sm">
+                    <GlassButton
+                      onClick={() => {
+                        if (courses[0].remainingSkips <= 1) void hapticWarning();
+                        else void hapticAction();
+                        void logAttendance(courses[0].id, 'SKIPPED');
+                      }}
+                      size="sm"
+                    >
                       + Log Skip
                     </GlassButton>
-                    <GlassButton onClick={() => logAttendance(courses[0].id, 'GHOST')} size="sm">
+                    <GlassButton
+                      onClick={() => {
+                        void hapticAction();
+                        void logAttendance(courses[0].id, 'GHOST');
+                      }}
+                      size="sm"
+                    >
                       <Ghost size={13} className="mr-1.5 text-violet-400" /> Ghost
                     </GlassButton>
                   </div>
@@ -335,9 +395,19 @@ function MainApp() {
                 <CourseCard
                   key={course.id}
                   course={course}
-                  onSkip={() => logAttendance(course.id, 'SKIPPED')}
-                  onAttended={() => logAttendance(course.id, 'ATTENDED')}
-                  onGhost={() => logAttendance(course.id, 'GHOST')}
+                  onSkip={() => {
+                    if (course.remainingSkips <= 1) void hapticWarning();
+                    else void hapticAction();
+                    void logAttendance(course.id, 'SKIPPED');
+                  }}
+                  onAttended={() => {
+                    void hapticAction();
+                    void logAttendance(course.id, 'ATTENDED');
+                  }}
+                  onGhost={() => {
+                    void hapticAction();
+                    void logAttendance(course.id, 'GHOST');
+                  }}
                 />
               ))}
               </div>
@@ -345,10 +415,16 @@ function MainApp() {
           )}
 
           {/* Tab Views */}
-          {activeTab === 'timetable' && <TimetableBoard timetable={timetable} />}
+          {activeTab === 'timetable' && (
+            <Suspense fallback={<div className="p-12 text-center text-slate-400">Loading timetable…</div>}>
+              <TimetableBoard timetable={timetable} />
+            </Suspense>
+          )}
 
           {activeTab === 'projects' && (
-            <BuildVault projectsCtrl={projectsCtrl} activitiesCtrl={activitiesCtrl} courses={courses} />
+            <Suspense fallback={<div className="p-12 text-center text-slate-400">Loading vault…</div>}>
+              <BuildVault projectsCtrl={projectsCtrl} activitiesCtrl={activitiesCtrl} courses={courses} />
+            </Suspense>
           )}
 
           {activeTab === 'notifications' && (
@@ -365,7 +441,10 @@ function MainApp() {
         <div className="w-full max-w-[440px] sm:w-auto sm:max-w-none pointer-events-auto shadow-2xl">
           <GlassTabs
             value={activeTab}
-            onValueChange={setActiveTab}
+            onValueChange={(val) => {
+              if (val !== activeTab) void hapticTap();
+              setActiveTab(val);
+            }}
             orientation="horizontal"
           >
             <GlassTabsList className="w-full sm:w-auto p-1 gap-0.5 sm:gap-1">
@@ -474,12 +553,16 @@ function MainApp() {
       )}
 
       {/* Settings Modal */}
-      <SettingsModal open={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
+      {showSettingsModal && (
+        <Suspense fallback={null}>
+          <SettingsModal open={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }
 
-function CourseCard({ course, onSkip, onAttended, onGhost }: { course: CourseStats; onSkip: () => void; onAttended: () => void; onGhost: () => void }) {
+const CourseCard = memo(function CourseCard({ course, onSkip, onAttended, onGhost }: { course: CourseStats; onSkip: () => void; onAttended: () => void; onGhost: () => void }) {
   return (
     <GlassPanel className="p-5 flex flex-col justify-between border-white/15 bg-slate-900/40">
       <div className="flex justify-between items-start">
@@ -520,4 +603,4 @@ function CourseCard({ course, onSkip, onAttended, onGhost }: { course: CourseSta
       </div>
     </GlassPanel>
   );
-}
+});

@@ -1,5 +1,6 @@
 import { Settings } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { hapticTap } from '@/lib/haptics';
 
 interface DockTab {
   id: string;
@@ -41,7 +42,10 @@ export function GlassDock({ tabs, activeTab, onChange, brand, settings = false }
             return (
               <button
                 key={tab.id}
-                onClick={() => onChange(tab.id)}
+                onClick={() => {
+                  if (activeTab !== tab.id) void hapticTap();
+                  onChange(tab.id);
+                }}
                 aria-label={tab.label}
                 className={`relative flex flex-col items-center justify-center py-1 rounded-2xl
                   transition-all duration-200 active:scale-95 select-none min-h-[48px] ${

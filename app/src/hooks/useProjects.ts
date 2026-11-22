@@ -6,10 +6,15 @@ import {
   type ProjectStatus,
   type ProjectTask,
 } from '@/lib/api';
+import { CACHE_KEYS, getCached } from '@/lib/offline-store';
 
 export function useProjects() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [projects, setProjects] = useState<Project[]>(
+    () => getCached<Project[]>(CACHE_KEYS.projects) ?? []
+  );
+  const [loading, setLoading] = useState(
+    () => !getCached<Project[]>(CACHE_KEYS.projects)
+  );
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

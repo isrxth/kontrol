@@ -498,11 +498,15 @@ export const Grainient = ({
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     };
 
+    let isLocked = false;
+
     const resize = () => {
       const s = settingsRef.current;
       view.width = Math.max(1, container.clientWidth);
       view.height = Math.max(1, container.clientHeight);
-      view.ratio = Math.min(s.dpr || window.devicePixelRatio || 1, 2);
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+      const maxDpr = isMobile ? 1.5 : 2;
+      view.ratio = Math.min(s.dpr || window.devicePixelRatio || 1, maxDpr);
       canvas.width = Math.max(1, Math.round(view.width * view.ratio));
       canvas.height = Math.max(1, Math.round(view.height * view.ratio));
       const width = Math.max(1, Math.round(canvas.width / 2));
@@ -579,7 +583,15 @@ export const Grainient = ({
 
     const frame = (now: number) => {
       raf = 0;
-      if (!visible || document.hidden) return;
+      if (!visible || document.hidden || isLocked) return;
+
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+      if (isMobile && last && now - last < 31) {
+        // Throttle to ~30fps on mobile devices
+        raf = requestAnimationFrame(frame);
+        return;
+      }
+
       const s = settingsRef.current;
       const dt = last ? clamp((now - last) / 1000, 0.001, 0.05) : 1 / 60;
       last = now;
@@ -599,7 +611,7 @@ export const Grainient = ({
     };
 
     function wake() {
-      if (!raf && visible && !document.hidden) raf = requestAnimationFrame(frame);
+      if (!raf && visible && !document.hidden && !isLocked) raf = requestAnimationFrame(frame);
     }
 
     const locate = (event: PointerEvent) => {
@@ -654,6 +666,19 @@ export const Grainient = ({
       }
     });
     intersection.observe(container);
+    const onLock = () => {
+      isLocked = true;
+      cancelAnimationFrame(raf);
+      raf = 0;
+    };
+    const onUnlock = () => {
+      isLocked = false;
+      last = 0;
+      wake();
+    };
+
+    window.addEventListener('kontrol:lock', onLock);
+    window.addEventListener('kontrol:unlock', onUnlock);
     window.addEventListener('pointermove', onPointerMove, { passive: true });
     window.addEventListener('pointerdown', onPointerDown, { passive: true });
     document.documentElement.addEventListener('pointerleave', onPointerLeave);
@@ -666,6 +691,8 @@ export const Grainient = ({
       wakeRef.current = null;
       resizeObserver.disconnect();
       intersection.disconnect();
+      window.removeEventListener('kontrol:lock', onLock);
+      window.removeEventListener('kontrol:unlock', onUnlock);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerdown', onPointerDown);
       document.documentElement.removeEventListener('pointerleave', onPointerLeave);

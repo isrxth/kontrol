@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Capacitor } from '@capacitor/core';
 import {
@@ -13,6 +13,9 @@ import {
   RefreshCw,
   Send,
   ShieldCheck,
+  Sparkles,
+  Smartphone,
+  Clock,
   X,
 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -22,9 +25,13 @@ import { GlassButton } from '@/components/glassyui/glass-button';
 import { GlassInput } from '@/components/glassyui/glass-input';
 import {
   areNotificationsEnabled,
-  sendTestNotification,
+  sendTestLectureNotification,
   setNotificationsEnabled,
+  checkExactAlarmSetting,
+  requestExactAlarmSetting,
+  getPendingNotificationsCount,
 } from '@/lib/notifications';
+import { isHapticsEnabled, setHapticsEnabled, hapticTap } from '@/lib/haptics';
 
 interface SettingsModalProps {
   open: boolean;
@@ -45,9 +52,20 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     () => typeof window !== 'undefined' && localStorage.getItem('kontrol_biometric_enabled') === 'true'
   );
 
+  // Haptics state
+  const [hapticsEnabled, setLocalHapticsEnabled] = useState(() => isHapticsEnabled());
+
   // Notification state
   const [notifsEnabled, setNotifsEnabled] = useState(() => areNotificationsEnabled());
   const [testSending, setTestSending] = useState(false);
+  const [exactAlarmStatus, setExactAlarmStatus] = useState<'granted' | 'prompt' | 'denied' | 'unsupported'>('unsupported');
+  const [pendingCount, setPendingCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (!open || !isNative) return;
+    void checkExactAlarmSetting().then(setExactAlarmStatus);
+    void getPendingNotificationsCount().then(setPendingCount);
+  }, [open, isNative]);
 
   // Reset TOTP state
   const [setupData, setSetupData] = useState<{
@@ -122,9 +140,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     setTestSending(true);
     setError(null);
     try {
-      const sent = await sendTestNotification();
+      const sent = await sendTestLectureNotification();
       if (sent) {
-        setSuccess('Test pop-up sent! Check your notification shade.');
+        setSuccess('Test interactive pop-up sent! Check your notification shade.');
       } else {
         setError('Notification permission not granted or device not supported.');
       }
@@ -197,8 +215,11 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-[#070707]/80 backdrop-blur-md">
-      <GlassPanel className="w-full max-w-md mx-auto p-6 rounded-3xl border-white/10 bg-[#161b2e]/95 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+    <div
+      className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-[#070707]/80 backdrop-blur-md transition-[padding] duration-200"
+      style={{ paddingBottom: 'var(--kb, 0px)' }}
+    >
+      <GlassPanel className="w-full max-w-md mx-auto p-6 rounded-3xl border-white/10 bg-[#161b2e]/95 shadow-2xl relative max-h-[calc(100dvh-var(--kb,0px)-32px)] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-white/10">
           <div className="flex items-center gap-2.5">
@@ -246,10 +267,10 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               </button>
             </div>
 
-            {/* Section 2: Biometric Unlock (Android Native) */}
-            {isNative && (
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Biometrics</p>
+            {/* Section 2: Biometric & Haptic Feedback */}
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Device &amp; Haptics</p>
+              {isNative && (
                 <div className="flex items-center justify-between px-4 py-3 rounded-2xl border border-white/10 bg-white/5">
                   <div className="flex items-center gap-2.5">
                     <Fingerprint size={18} className="text-indigo-400" />
@@ -271,8 +292,35 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     />
                   </button>
                 </div>
+              )}
+
+              <div className="flex items-center justify-between px-4 py-3 rounded-2xl border border-white/10 bg-white/5">
+                <div className="flex items-center gap-2.5">
+                  <Smartphone size={18} className="text-emerald-400" />
+                  <div>
+                    <p className="text-sm font-medium text-white">Haptic Feedback</p>
+                    <p className="text-[11px] text-slate-400">Tactile vibrations on taps, actions, and unlock</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    const next = !hapticsEnabled;
+                    setLocalHapticsEnabled(next);
+                    setHapticsEnabled(next);
+                    if (next) void hapticTap();
+                  }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    hapticsEnabled ? 'bg-indigo-500' : 'bg-slate-700'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      hapticsEnabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
               </div>
-            )}
+            </div>
 
             {/* Section 3: Pop-up Notifications */}
             <div>
@@ -300,6 +348,35 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   </button>
                 </div>
 
+                {/* Pending scheduled notifications diagnostics pill */}
+                {isNative && notifsEnabled && (
+                  <div className="flex items-center justify-between px-3 py-2 rounded-xl border border-white/10 bg-white/[0.03] text-xs">
+                    <span className="flex items-center gap-1.5 text-slate-400">
+                      <Clock size={13} className="text-indigo-400" />
+                      <span>Pending Scheduled Alarms</span>
+                    </span>
+                    <span className="font-mono font-medium text-indigo-300">
+                      {pendingCount} queued
+                    </span>
+                  </div>
+                )}
+
+                {/* Exact Alarm Setting button on Android 13+ if denied or prompt */}
+                {isNative && (exactAlarmStatus === 'denied' || exactAlarmStatus === 'prompt') && (
+                  <GlassButton
+                    onClick={async () => {
+                      await requestExactAlarmSetting();
+                      const updated = await checkExactAlarmSetting();
+                      setExactAlarmStatus(updated);
+                    }}
+                    size="sm"
+                    className="w-full justify-center text-xs py-2 border-amber-500/30 bg-amber-500/10 text-amber-300"
+                  >
+                    <AlertTriangle size={13} className="mr-1.5" />
+                    Enable Exact Alarms in System Settings
+                  </GlassButton>
+                )}
+
                 {isNative && notifsEnabled && (
                   <GlassButton
                     onClick={handleSendTestPopUp}
@@ -308,8 +385,23 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     className="w-full justify-center text-xs py-2 border-white/10"
                   >
                     <Send size={13} className="mr-1.5 text-indigo-400" />
-                    {testSending ? 'Sending…' : 'Send Test Pop-Up'}
+                    {testSending ? 'Sending…' : 'Test Interactive Lecture Pop-Up'}
                   </GlassButton>
+                )}
+
+                {isNative && (
+                  <div className="p-3 rounded-2xl border border-indigo-500/20 bg-indigo-500/10 text-left space-y-1">
+                    <p className="text-[11px] font-semibold text-indigo-300 flex items-center gap-1.5">
+                      <Sparkles size={12} className="shrink-0" />
+                      <span>HyperOS / MIUI Pop-Up Setup</span>
+                    </p>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      For heads-up lecture alerts to pop over other apps and on lock screen, ensure{' '}
+                      <span className="text-white font-medium">Display pop-up windows</span> and{' '}
+                      <span className="text-white font-medium">Autostart</span> are enabled in{' '}
+                      <span className="text-white font-mono text-[10px]">Settings → Apps → Kontrol</span>.
+                    </p>
+                  </div>
                 )}
               </div>
             </div>

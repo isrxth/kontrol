@@ -75,8 +75,27 @@ export function GlassSheet({
   const handleFocus = useCallback((e: React.FocusEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     if (!/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
-    timerRef.current = setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' }), 120);
+    setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' }), 100);
+    setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' }), 350);
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleViewportChange = () => {
+      const active = document.activeElement as HTMLElement | null;
+      if (active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName) && bodyRef.current?.contains(active)) {
+        setTimeout(() => {
+          active.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        }, 150);
+      }
+    };
+    window.visualViewport?.addEventListener('resize', handleViewportChange);
+    window.addEventListener('resize', handleViewportChange);
+    return () => {
+      window.visualViewport?.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('resize', handleViewportChange);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -102,17 +121,19 @@ export function GlassSheet({
       <div
         className={clsx(
           'z-[201] pointer-events-auto flex flex-col',
-          isBottom ? 'fixed inset-x-0 bottom-0 transition-[bottom,transform,opacity] duration-250 ease-out' : 'fixed inset-y-0 right-0 w-full transition-transform duration-250 ease-out',
+          isBottom ? 'fixed inset-x-0 bottom-0 transition-[margin-bottom,max-height,transform,opacity] duration-250 ease-out' : 'fixed inset-y-0 right-0 w-full transition-transform duration-250 ease-out',
           className
         )}
         style={{
-          bottom: isBottom ? 'var(--kb, 0px)' : undefined,
-          maxHeight: isBottom ? 'calc(100dvh - var(--sat, 0px) - var(--kb, 0px) - 16px)' : undefined,
+          marginBottom: isBottom ? 'var(--kb, 0px)' : undefined,
+          maxHeight: isBottom ? 'calc(100dvh - var(--sat, 32px) - var(--kb, 0px) - 16px)' : undefined,
+          paddingBottom: isBottom ? 'calc(var(--sab, 20px) + 16px)' : undefined,
           maxWidth,
           transform: closing ? (isBottom ? 'translateY(24px)' : 'translateX(100%)') : 'translateX(0) translateY(0)',
           opacity: closing ? 0 : 1,
         }}
         onClick={(e) => e.stopPropagation()}
+        onFocusCapture={handleFocus}
       >
         <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-2 sm:hidden" />
         {(title || subtitle) && (
@@ -135,6 +156,7 @@ export function GlassSheet({
         <div
           ref={bodyRef}
           className={clsx('flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6', bodyClassName)}
+          style={{ paddingBottom: isBottom && !footer ? 'calc(var(--sab, env(safe-area-inset-bottom, 0px)) + 24px)' : undefined }}
           onFocusCapture={handleFocus}
         >
           {children}

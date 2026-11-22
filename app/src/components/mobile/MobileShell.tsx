@@ -1,14 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { ReactiveBackground } from '@/components/ui/ReactiveBackground';
 import { GlassInput } from '@/components/glassyui/glass-input';
 import { GlassButton } from '@/components/glassyui/glass-button';
-import { TimetableBoard } from '@/components/timetable/TimetableBoard';
-import { BuildVault } from '@/components/vault/BuildVault';
 import { GlassPanel } from '@/components/glassyui/glass-panel';
-import { SettingsModal } from '@/components/SettingsModal';
+import { DashboardMobileSkeleton } from '@/components/ui/GlassySkeleton';
 import { syncAllNotifications } from '@/lib/notifications';
+
+const TimetableBoard = lazy(() =>
+  import('@/components/timetable/TimetableBoard').then((m) => ({ default: m.TimetableBoard }))
+);
+const BuildVault = lazy(() =>
+  import('@/components/vault/BuildVault').then((m) => ({ default: m.BuildVault }))
+);
+const SettingsModal = lazy(() =>
+  import('@/components/SettingsModal').then((m) => ({ default: m.SettingsModal }))
+);
 
 import { MobileTopBar } from './MobileTopBar';
 import { MobileHeroMetric } from './MobileHeroMetric';
@@ -125,9 +133,9 @@ export function MobileShell({
       >
         {activeTab === 'overview' && (
           <>
-            {loading ? (
-              <div className="px-4 py-8 text-center text-slate-400 text-sm">Loading modules…</div>
-            ) : error ? (
+            {loading && courses.length === 0 ? (
+              <DashboardMobileSkeleton />
+            ) : error && courses.length === 0 ? (
               <div className="px-4 py-8 text-center">
                 <p className="text-rose-400 font-semibold">API Offline</p>
                 <p className="text-slate-500 text-xs mt-1">{error}</p>
@@ -199,17 +207,21 @@ export function MobileShell({
 
         {activeTab === 'timetable' && (
           <div className="px-2 pt-2">
-            <TimetableBoard timetable={timetable} />
+            <Suspense fallback={<div className="p-8 text-center text-slate-400">Loading timetable…</div>}>
+              <TimetableBoard timetable={timetable} />
+            </Suspense>
           </div>
         )}
 
         {activeTab === 'projects' && (
           <div className="px-2 pt-2">
-            <BuildVault
-              projectsCtrl={projectsCtrl}
-              activitiesCtrl={activitiesCtrl}
-              courses={courses}
-            />
+            <Suspense fallback={<div className="p-8 text-center text-slate-400">Loading vault…</div>}>
+              <BuildVault
+                projectsCtrl={projectsCtrl}
+                activitiesCtrl={activitiesCtrl}
+                courses={courses}
+              />
+            </Suspense>
           </div>
         )}
 
@@ -313,7 +325,11 @@ export function MobileShell({
       )}
 
       {/* Settings Modal */}
-      <SettingsModal open={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
+      {showSettingsModal && (
+        <Suspense fallback={null}>
+          <SettingsModal open={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }

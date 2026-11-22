@@ -229,3 +229,9 @@ nav .lg-tabs-trigger {
     min-width: 7rem;
   }
 }
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
