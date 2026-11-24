@@ -63,7 +63,7 @@ function MainApp() {
 
   useEffect(() => {
     if (courses.length > 0) {
-      void syncAllNotifications(courses, timetable.slots, activitiesCtrl.activities);
+      void syncAllNotifications(courses, timetable.slots, activitiesCtrl.activities, new Set());
     }
   }, [courses, timetable.slots, activitiesCtrl.activities]);
 
@@ -71,7 +71,7 @@ function MainApp() {
     const handleActivitiesUpdated = (e: Event) => {
       const custom = e as CustomEvent<{ activities: Activity[] }>;
       if (custom.detail?.activities && courses.length > 0) {
-        void syncAllNotifications(courses, timetable.slots, custom.detail.activities);
+        void syncAllNotifications(courses, timetable.slots, custom.detail.activities, new Set());
       }
     };
     window.addEventListener('kontrol:activities-updated', handleActivitiesUpdated);

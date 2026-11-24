@@ -1,5 +1,4 @@
 import { LayoutDashboard, Calendar, FolderGit2, Bell } from 'lucide-react';
-import { hapticTap } from '@/lib/haptics';
 
 interface MobileDockProps {
   activeTab: string;
@@ -33,7 +32,6 @@ export function MobileDock({ activeTab, setActiveTab }: MobileDockProps) {
               <button
                 key={tab.id}
                 onClick={() => {
-                  if (activeTab !== tab.id) void hapticTap();
                   setActiveTab(tab.id);
                 }}
                 aria-label={tab.label}

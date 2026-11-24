@@ -1,5 +1,5 @@
 import { Capacitor } from '@capacitor/core';
-import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
+import { Haptics, NotificationType } from '@capacitor/haptics';
 
 const isNative = typeof window !== 'undefined' && Capacitor.isNativePlatform();
 
@@ -15,15 +15,16 @@ export function setHapticsEnabled(enabled: boolean): void {
 }
 
 /**
- * ImpactStyle.Light — for tab switches, sheet toggles, carousel snap changes
+ * Crisp micro-pulse (8ms) — for tab switches, sheet toggles, carousel snap changes.
+ * Replaces heavy ImpactStyle.Light (50ms+) on Android.
  */
 export async function hapticTap(): Promise<void> {
   if (!isHapticsEnabled()) return;
   try {
     if (isNative) {
-      await Haptics.impact({ style: ImpactStyle.Light });
+      await Haptics.vibrate({ duration: 8 });
     } else if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-      navigator.vibrate(10);
+      navigator.vibrate(8);
     }
   } catch {
     // Ignore devices that do not support haptics
@@ -31,15 +32,16 @@ export async function hapticTap(): Promise<void> {
 }
 
 /**
- * ImpactStyle.Medium — for logging Attend, Skip, Ghost actions
+ * Crisp micro-pulse (14ms) — for logging Attend, Skip, Ghost actions.
+ * Replaces heavy ImpactStyle.Medium (50ms+) on Android.
  */
 export async function hapticAction(): Promise<void> {
   if (!isHapticsEnabled()) return;
   try {
     if (isNative) {
-      await Haptics.impact({ style: ImpactStyle.Medium });
+      await Haptics.vibrate({ duration: 14 });
     } else if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-      navigator.vibrate(20);
+      navigator.vibrate(14);
     }
   } catch {
     // Ignore
@@ -47,15 +49,16 @@ export async function hapticAction(): Promise<void> {
 }
 
 /**
- * NotificationType.Success — for AppLock unlock, PIN verification, completed activities
+ * Crisp single 16ms pulse — for AppLock unlock, PIN verification, completed activities.
+ * Replaced heavy double-buzz NotificationType.Success.
  */
 export async function hapticSuccess(): Promise<void> {
   if (!isHapticsEnabled()) return;
   try {
     if (isNative) {
-      await Haptics.notification({ type: NotificationType.Success });
+      await Haptics.vibrate({ duration: 16 });
     } else if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-      navigator.vibrate([15, 40, 15]);
+      navigator.vibrate(16);
     }
   } catch {
     // Ignore
@@ -63,7 +66,7 @@ export async function hapticSuccess(): Promise<void> {
 }
 
 /**
- * NotificationType.Warning — for logging skip when remainingSkips <= 1, or failed PIN/TOTP
+ * NotificationType.Warning — for logging skip when remainingSkips <= 1, or failed PIN/TOTP.
  */
 export async function hapticWarning(): Promise<void> {
   if (!isHapticsEnabled()) return;

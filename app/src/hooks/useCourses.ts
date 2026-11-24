@@ -69,12 +69,12 @@ export function useCourses() {
 
   const logAttendance = useCallback(async (courseId: string, status: LogStatus, reason?: string) => {
     applyOptimisticAttendance(courseId, status);
-    try {
-      await api.logAttendance(courseId, status, reason);
-      await fetchStats();
-    } catch {
-      // offline mutation handled via outbox and optimistic state
-    }
+    // Sync to Supabase silently in the background; optimistic state is the
+    // primary device source of truth.
+    void api.logAttendance(courseId, status, reason).then(
+      () => void fetchStats(),
+      () => {} // network error handled by offline outbox
+    );
   }, [fetchStats]);
 
   const addCourse = useCallback(async (input: NewCourseInput) => {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type Activity, type NewActivityInput } from '@/lib/api';
-import { CACHE_KEYS, getCached } from '@/lib/offline-store';
+import { CACHE_KEYS, getCached, setCached } from '@/lib/offline-store';
 import { hapticSuccess } from '@/lib/haptics';
 
 export function useActivities() {
@@ -17,6 +17,7 @@ export function useActivities() {
   const refetch = useCallback(async () => {
     const data = await api.getActivities();
     setActivities(data);
+    setCached(CACHE_KEYS.activities, data);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('kontrol:activities-updated', { detail: { activities: data } }));
     }
@@ -31,6 +32,7 @@ export function useActivities() {
         const data = await api.getActivities();
         if (!cancelled) {
           setActivities(data);
+          setCached(CACHE_KEYS.activities, data);
           setError(null);
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('kontrol:activities-updated', { detail: { activities: data } }));
@@ -49,27 +51,51 @@ export function useActivities() {
     };
   }, []);
 
-  const runAction = useCallback(
-    async (action: () => Promise<unknown>) => {
-      setActionError(null);
+  /** Optimistic mutation helper for activities. */
+  const runOptimistic = useCallback(
+    async (mutator: () => void, action: () => Promise<unknown>) => {
+      const prev = [...activities];
       setBusy(true);
+      mutator();
+      setCached(CACHE_KEYS.activities, [...activities]);
       try {
         await action();
-        await refetch();
-        return true;
+        void refetch();
       } catch (err) {
+        setActivities(prev);
+        setCached(CACHE_KEYS.activities, prev);
         setActionError(err instanceof Error ? err.message : 'Action failed');
-        return false;
       } finally {
         setBusy(false);
       }
     },
-    [refetch],
+    [activities, refetch]
   );
 
   const createActivity = useCallback(
-    (input: NewActivityInput) => runAction(() => api.createActivity(input)),
-    [runAction],
+    (input: NewActivityInput) => {
+      const tempId = `opt_act_${Date.now()}`;
+      const optimistic: Activity = {
+        id: tempId,
+        title: input.title,
+        type: input.type,
+        courseId: input.courseId ?? null,
+        courseCode: null,
+        dueDate: input.dueDate ?? null,
+        dueTime: input.dueTime ?? null,
+        priority: input.priority ?? 'MEDIUM',
+        notes: input.notes ?? null,
+        isDone: false,
+        completedAt: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      void runOptimistic(
+        () => setActivities([...activities, optimistic]),
+        () => api.createActivity(input)
+      );
+    },
+    [activities, runOptimistic]
   );
 
   const updateActivity = useCallback(
@@ -77,14 +103,28 @@ export function useActivities() {
       if (input.isDone) {
         void hapticSuccess();
       }
-      return runAction(() => api.updateActivity(id, input));
+      void runOptimistic(
+        () => {
+          setActivities(activities.map((a) =>
+            a.id === id ? { ...a, ...input, updatedAt: new Date().toISOString() } : a
+          ));
+        },
+        () => api.updateActivity(id, input)
+      );
     },
-    [runAction],
+    [activities, runOptimistic]
   );
 
   const deleteActivity = useCallback(
-    (id: string) => runAction(() => api.deleteActivity(id)),
-    [runAction],
+    (id: string) => {
+      void runOptimistic(
+        () => {
+          setActivities(activities.filter((a) => a.id !== id));
+        },
+        () => api.deleteActivity(id)
+      );
+    },
+    [activities, runOptimistic]
   );
 
   return {

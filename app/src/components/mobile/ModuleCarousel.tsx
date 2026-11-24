@@ -1,7 +1,6 @@
 import { memo } from 'react';
 import { Plus, CheckCircle, AlertTriangle, ShieldAlert } from 'lucide-react';
 import type { CourseStats } from '@/lib/api';
-import { hapticTap } from '@/lib/haptics';
 
 interface ModuleCarouselProps {
   courses: CourseStats[];
@@ -47,7 +46,6 @@ export const ModuleCarousel = memo(function ModuleCarousel({
           <div
             key={course.id}
             onClick={() => {
-              void hapticTap();
               onSelectCourse?.(course);
             }}
             className={`snap-start shrink-0 w-[176px] h-[116px] rounded-[20px] p-3.5
@@ -102,7 +100,6 @@ export const ModuleCarousel = memo(function ModuleCarousel({
       {/* Add module card */}
       <div
         onClick={() => {
-          void hapticTap();
           onAddModule();
         }}
         aria-label="Add module"

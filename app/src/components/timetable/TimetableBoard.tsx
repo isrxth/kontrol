@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   DndContext,
@@ -9,18 +9,29 @@ import {
 } from '@dnd-kit/core';
 import { useDndSensors } from '@/hooks/useDndSensors';
 import { ArrowLeftRight, RefreshCw } from 'lucide-react';
-import { timetableSlots, noonBreak, type LogStatus } from '@/lib/api';
+import {
+  GlassButton,
+} from '@/components/glassyui/glass-button';
+import { GlassSheet } from '@/components/ui/GlassSheet';
+import {
+  timetableSlots, noonBreak, type LogStatus, api,
+} from '@/lib/api';
 import {
   buildGrid,
   DAY_LABELS,
   DAY_SHORT_LABELS,
   dayOfWeekOf,
-  mondayOf,
   parseCellDroppableId,
   parseDragId,
   unplacedCourses,
   type GridCell,
+  weekStartOf,
+  dateForDay,
+  formatDayHeader,
+  formatWeekRange,
+  formatDayFull,
 } from '@/lib/timetable';
+import { hapticAction, hapticWarning } from '@/lib/haptics';
 import type { TimetableController } from '@/hooks/useTimetable';
 import { ModulePalette } from './ModulePalette';
 import { SlotCell } from './SlotCell';
@@ -51,7 +62,7 @@ function useIsDesktop() {
 
 export function TimetableBoard({ timetable }: TimetableBoardProps) {
   const {
-    courses, slots, swapMap, today, loading, error, actionError, clearActionError, busy,
+    courses, slots, swapMap, loading, error, actionError, clearActionError, busy,
     place, move, unassign, setVenue, toggleCancelled, toggleSwap, logForCell, refetch,
   } = timetable;
 
@@ -60,18 +71,74 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [venueEdit, setVenueEdit] = useState<{ slotId: string; code: string; venue: string } | null>(null);
 
+  // ── Week offset state ──────────────────────────────────────────────
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [weekLogs, setWeekLogs] = useState<Map<string, LogStatus>>(new Map());
+  const [holidayDates, setHolidayDates] = useState<Set<string>>(new Set());
+  const [openSheet, setOpenSheet] = useState<{ cell: GridCell; date: string } | null>(null);
+
   const todayDow = dayOfWeekOf(new Date());
   const isSchoolDay = todayDow <= 5;
   const isDesktop = useIsDesktop();
+
+  const weekStart = weekStartOf(new Date(), weekOffset);
+  const weekDates = DAY_LABELS.map((_label, i) => dateForDay(weekStart, i + 1));
+  const startDate = weekDates[0];
+  const endDate = weekDates[4];
+  const weekRangeLabel = formatWeekRange(startDate, endDate);
+
   const grid = useMemo(() => buildGrid(slots, swapMap), [slots, swapMap]);
   const paletteCourses = useMemo(() => unplacedCourses(courses, slots, swapMap), [courses, slots, swapMap]);
-  const todayStatusMap = useMemo(() => {
-    const map = new Map<string, LogStatus>();
-    for (const t of today) {
-      if (t.logStatus) map.set(`${t.dayOfWeek}:${t.startTime}`, t.logStatus);
-    }
-    return map;
-  }, [today]);
+
+  // ── Fetch logs for the visible week ─────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        const logMap = new Map<string, LogStatus>();
+        const holidaySet = new Set<string>();
+
+        for (const course of courses) {
+          try {
+            const logs = await api.getLogs(course.id);
+            for (const log of logs) {
+              if (log.logDate < startDate || log.logDate > endDate) continue;
+              const key = `${log.courseId}|${log.logDate}|${log.slotTime ?? ''}`;
+              logMap.set(key, log.status);
+              if (log.status === 'CANCELLED') {
+                holidaySet.add(log.logDate);
+              }
+            }
+          } catch {
+            // Individual course log fetch failure is non-fatal
+          }
+        }
+
+        if (!cancelled) {
+          setWeekLogs(logMap);
+          setHolidayDates(holidaySet);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    void run();
+    return () => { cancelled = true; };
+  }, [courses, startDate, endDate]);
+
+  // ── Derive per-cell log status from week logs ───────────────────────
+  const cellLogStatus = useCallback((cell: GridCell): LogStatus | null => {
+    if (!cell.cell) return null;
+    const cellDate = dateForDay(weekStart, cell.dayOfWeek);
+    const key = `${cell.cell.course.id}|${cellDate}|${cell.startTime}`;
+    return weekLogs.get(key) ?? null;
+  }, [weekLogs, weekStart]);
+
+  const isHolidayDate = useCallback((date: string): boolean => {
+    return holidayDates.has(date);
+  }, [holidayDates]);
 
   if (loading) {
     return (
@@ -133,14 +200,12 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
       } else if (occupant.courseId === active.courseId || targetCell.cell?.course.id === active.courseId) {
         return;
       } else {
-        // Replace: occupant goes back to the palette, dragged module takes the cell.
-        const done = await unassign(occupant.id);
-        if (done) void place(active.courseId, target.dayOfWeek, target.slotIndex);
+        await unassign(occupant.id);
+        void place(active.courseId, target.dayOfWeek, target.slotIndex);
       }
       return;
     }
 
-    // Dragging a placed module. active.courseId is what the source cell displays this week.
     const sourceCell = grid.flat().find((c) => c.slot?.id === active.slotId) ?? null;
     if (!sourceCell) return;
     if (sourceCell.dayOfWeek === target.dayOfWeek && sourceCell.slotIndex === target.slotIndex) return;
@@ -152,11 +217,10 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
       if (draggedBaseSlotId === draggedCell.slot.id) {
         void move(draggedCell.slot.id, target.dayOfWeek, target.slotIndex);
       } else {
-        // Source cell shows a swapped-in module: revert the swap, then move its base slot.
         const swap = swapMap.get(draggedCell.slot.id);
         if (!swap) return;
-        const reverted = await toggleSwap(swap.slotAId, swap.slotBId);
-        if (reverted) void move(draggedBaseSlotId, target.dayOfWeek, target.slotIndex);
+        await toggleSwap(swap.slotAId, swap.slotBId);
+        void move(draggedBaseSlotId, target.dayOfWeek, target.slotIndex);
       }
       return;
     }
@@ -164,16 +228,18 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
     const targetSlot = targetCell.slot;
     if (draggedBaseSlotId === targetSlot.id) return;
 
-    // Weekly swap: exchanged for this week only. Re-swapping the same pair reverts it.
     void toggleSwap(draggedBaseSlotId, targetSlot.id);
   };
 
-  const weekStart = mondayOf(new Date());
-
+  // ── Handlers ────────────────────────────────────────────────────────
   const handlers = {
     onLog: (cell: GridCell, status: LogStatus) => {
       const course = cell.cell?.course;
-      if (course) void logForCell(course.id, cell.slotIndex, status);
+      if (course) {
+        const cellDate = dateForDay(weekStart, cell.dayOfWeek);
+        void logForCell(course.id, cell.slotIndex, status, undefined, cellDate);
+        void hapticAction();
+      }
     },
     onToggleCancelClass: (cell: GridCell) => {
       if (cell.cell) void toggleCancelled(cell.cell.slot.id, !cell.cell.slot.isCancelled);
@@ -190,6 +256,175 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
     onRemove: (cell: GridCell) => {
       if (cell.cell) void unassign(cell.cell.slot.id);
     },
+    onSlotClick: (cell: GridCell) => {
+      if (!cell.cell) return;
+      const cellDate = dateForDay(weekStart, cell.dayOfWeek);
+      setOpenSheet({ cell, date: cellDate });
+    },
+  };
+
+  // ── Holiday actions ─────────────────────────────────────────────────
+  const markHoliday = useCallback(async (dayOfWeek: number, date: string) => {
+    const daySlots = slots.filter((s) => s.dayOfWeek === dayOfWeek && !s.isCancelled);
+    if (daySlots.length === 0) return;
+
+    // Optimistically add holiday logs
+    const newLogs: Array<{ courseId: string; date: string; status: LogStatus }> = [];
+    for (const slot of daySlots) {
+      newLogs.push({ courseId: slot.courseId, date, status: 'CANCELLED' });
+      const key = `${slot.courseId}|${date}|${slot.startTime}`;
+      weekLogs.set(key, 'CANCELLED');
+    }
+    setWeekLogs(new Map(weekLogs));
+    setHolidayDates(new Set([...holidayDates, date]));
+
+    // Fire all API calls in background
+    await Promise.all(daySlots.map((slot) =>
+      api.logAttendance(slot.courseId, 'CANCELLED', undefined, { logDate: date, slotTime: slot.startTime }).catch(() => undefined)
+    ));
+    void hapticAction();
+  }, [slots, weekLogs, holidayDates]);
+
+  const undoHoliday = useCallback(async (date: string) => {
+    const daySlots = slots.filter((s) => {
+      const cellDate = dateForDay(weekStart, s.dayOfWeek);
+      return cellDate === date && !s.isCancelled;
+    });
+
+    // Optimistically remove
+    for (const slot of daySlots) {
+      const key = `${slot.courseId}|${date}|${slot.startTime}`;
+      weekLogs.delete(key);
+    }
+    setWeekLogs(new Map(weekLogs));
+    setHolidayDates(new Set([...holidayDates].filter((d) => d !== date)));
+
+    await Promise.all(daySlots.map((slot) =>
+      api.deleteLog(slot.courseId, date, 'CANCELLED').catch(() => undefined)
+    ));
+    void hapticAction();
+  }, [slots, weekStart, holidayDates, dateForDay]);
+
+  // ── Slot action sheet ───────────────────────────────────────────────
+  const renderSlotSheet = () => {
+    if (!openSheet) return null;
+    const { cell, date } = openSheet;
+    const course = cell.cell!.course;
+    const slot = cell.cell!.slot;
+    const cancelled = slot.isCancelled;
+    const currentStatus = cellLogStatus(cell);
+
+    return (
+      <GlassSheet
+        open={Boolean(openSheet)}
+        onClose={() => setOpenSheet(null)}
+        title={course.code}
+        subtitle={`${formatDayFull(date)} • ${slot.startTime}–${slot.endTime}${slot.venue ? ` • ${slot.venue}` : ''}`}
+        side="bottom"
+      >
+        <div className="space-y-3">
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <p className="text-xs text-slate-400">Current status</p>
+            <p className="text-sm font-semibold text-white mt-0.5">
+              {currentStatus ? currentStatus.charAt(0) + currentStatus.slice(1).toLowerCase() : 'None'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <GlassButton
+              variant="ghost"
+              size="sm"
+              onClick={() => { handlers.onLog(cell, 'ATTENDED'); setOpenSheet(null); }}
+              className="text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10"
+            >
+              Attend
+            </GlassButton>
+            <GlassButton
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (courses.find((c) => c.id === course.id)?.remainingSkips ?? 0 <= 1) void hapticWarning();
+                else void hapticAction();
+                handlers.onLog(cell, 'SKIPPED');
+                setOpenSheet(null);
+              }}
+              className="text-rose-400 border-rose-500/20 hover:bg-rose-500/10"
+            >
+              Skip
+            </GlassButton>
+            <GlassButton
+              variant="ghost"
+              size="sm"
+              onClick={() => { handlers.onLog(cell, 'GHOST'); setOpenSheet(null); }}
+              className="text-violet-400 border-violet-500/20 hover:bg-violet-500/10"
+            >
+              Ghost
+            </GlassButton>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <GlassButton
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                void markHoliday(cell.dayOfWeek, date);
+                setOpenSheet(null);
+              }}
+              className={`text-amber-400 border-amber-500/20 hover:bg-amber-500/10 ${cancelled ? 'opacity-50' : ''}`}
+              disabled={cancelled}
+            >
+              {cancelled ? 'Holiday (on)' : 'Holiday'}
+            </GlassButton>
+            <GlassButton
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                handleClearLog(cell);
+                setOpenSheet(null);
+              }}
+              className="text-slate-400 border-white/10 hover:bg-white/10"
+              disabled={!currentStatus}
+            >
+              Clear Log
+            </GlassButton>
+          </div>
+
+          {cancelled && (
+            <div className="pt-2 border-t border-white/10">
+              <GlassButton
+                variant="ghost"
+                size="sm"
+                onClick={() => { void undoHoliday(date); setOpenSheet(null); }}
+                className="w-full text-rose-400 border-rose-500/20 hover:bg-rose-500/10"
+              >
+                Undo Holiday for this date
+              </GlassButton>
+            </div>
+          )}
+        </div>
+      </GlassSheet>
+    );
+  };
+
+  // Clear Log handler: treat as deleting the log for that cell/date
+  const handleClearLog = useCallback((cell: GridCell) => {
+    if (!cell.cell) return;
+    const cellDate = dateForDay(weekStart, cell.dayOfWeek);
+    void api.deleteLog(cell.cell.course.id, cellDate, 'CANCELLED').catch(() => undefined);
+    const key = `${cell.cell.course.id}|${cellDate}|${cell.startTime}`;
+    weekLogs.delete(key);
+    setWeekLogs(new Map(weekLogs));
+    void hapticAction();
+  }, [weekLogs, weekStart]);
+
+  // Wrap onLog to handle CLEAR
+  const originalOnLog = handlers.onLog;
+  const onLogWithClear = (cell: GridCell, status: LogStatus | 'CLEAR') => {
+    if (status === 'CLEAR') {
+      handleClearLog(cell);
+      return;
+    }
+    originalOnLog(cell, status as LogStatus);
   };
 
   return (
@@ -204,11 +439,23 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
         {/* Week banner */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs text-slate-400">
-            <ArrowLeftRight size={13} className="text-indigo-300" />
-            <span>
-              Week of <span className="font-semibold text-slate-200">{weekStart}</span>
-              <span className="text-slate-500"> · swaps apply to this week only</span>
-            </span>
+            <button
+              type="button"
+              onClick={() => setWeekOffset((o) => o - 1)}
+              className="rounded-lg p-1.5 text-indigo-300 hover:bg-white/10 transition-all"
+              disabled={weekOffset <= 0}
+            >
+              <ArrowLeftRight size={13} />
+            </button>
+            <span className="font-semibold text-slate-200">{weekRangeLabel}</span>
+            <button
+              type="button"
+              onClick={() => setWeekOffset((o) => o + 1)}
+              className="rounded-lg p-1.5 text-indigo-300 hover:bg-white/10 transition-all"
+            >
+              <ArrowLeftRight size={13} className="rotate-180" />
+            </button>
+            <span className="ml-3 text-xs text-slate-500">· swaps apply to this week only</span>
           </div>
           <button
             type="button"
@@ -232,26 +479,51 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
           <div className="flex gap-4">
             <ModulePalette courses={paletteCourses} dragActive={Boolean(dragPreview)} />
 
-            {/* Grid: time column + 5 day columns */}
             <div
               className="grid min-w-0 flex-1 gap-2"
               style={{ gridTemplateColumns: '92px repeat(5, minmax(0, 1fr))' }}
             >
               {/* Header row */}
               <div />
-              {DAY_LABELS.map((label, i) => (
-                <div
-                  key={label}
-                  className={`pb-1 text-center text-xs font-bold tracking-wide ${
-                    isSchoolDay && todayDow === i + 1 ? 'text-indigo-300' : 'text-slate-400'
-                  }`}
-                >
-                  {label}
-                  {isSchoolDay && todayDow === i + 1 && (
-                    <span className="ml-1 rounded-full bg-indigo-500/20 px-1.5 py-0.5 text-[9px] font-semibold">Today</span>
-                  )}
-                </div>
-              ))}
+              {DAY_LABELS.map((label, i) => {
+                const dayOfWeek = i + 1;
+                const date = weekDates[i];
+                const isToday = isSchoolDay && todayDow === dayOfWeek;
+                const isHoliday = isHolidayDate(date);
+                return (
+                  <div
+                    key={label}
+                    className={`pb-1 text-center text-xs font-bold tracking-wide rounded-t-xl px-2 py-1.5 transition-colors
+                      ${isHoliday
+                        ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400'
+                        : isToday
+                        ? 'text-indigo-300 border-b border-indigo-400/50'
+                        : 'text-slate-400'
+                      }`}
+                  >
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span>{formatDayHeader(date)}</span>
+                      <span className="text-[9px] opacity-70">{DAY_SHORT_LABELS[i]}</span>
+                      {isToday && (
+                        <span className="ml-0.5 rounded-full bg-indigo-500/20 px-1.5 py-0 text-[8px] font-semibold">Today</span>
+                      )}
+                      {isHoliday && (
+                        <span className="ml-0.5 rounded-full bg-amber-500/20 px-1.5 py-0 text-[8px] font-semibold text-amber-400">Holiday</span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void markHoliday(dayOfWeek, date);
+                      }}
+                      className="mt-1.5 shrink-0 rounded-xl border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-semibold text-amber-400 hover:bg-amber-500/20 transition-all"
+                    >
+                      {isHoliday ? 'Undo Holiday' : 'Mark Holiday'}
+                    </button>
+                  </div>
+                );
+              })}
 
               {/* Slot rows, with the noon break between slots 2 and 3 */}
               {timetableSlots.map((def, defIndex) => (
@@ -260,11 +532,13 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
                   defIndex={defIndex}
                   cells={grid[defIndex]}
                   todayDow={isSchoolDay ? todayDow : -1}
-                  todayStatusMap={todayStatusMap}
                   openMenu={openMenu}
                   setOpenMenu={setOpenMenu}
                   dragActive={Boolean(dragPreview)}
-                  handlers={handlers}
+                  handlers={{ ...handlers, onLog: onLogWithClear }}
+                  weekStart={weekStart}
+                  cellLogStatus={cellLogStatus}
+                  isHolidayDate={isHolidayDate}
                 />
               ))}
             </div>
@@ -275,10 +549,13 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
             paletteCourses={paletteCourses}
             dragActive={Boolean(dragPreview)}
             todayDow={isSchoolDay ? todayDow : -1}
-            todayStatusMap={todayStatusMap}
             openMenu={openMenu}
             setOpenMenu={setOpenMenu}
-            handlers={handlers}
+            handlers={{ ...handlers, onLog: onLogWithClear }}
+            weekStart={weekStart}
+            cellLogStatus={cellLogStatus}
+            isHolidayDate={isHolidayDate}
+            weekDates={weekDates}
           />
         )}
       </div>
@@ -302,11 +579,13 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
           busy={busy}
           onClose={() => setVenueEdit(null)}
           onSave={async (venue) => {
-            const ok = await setVenue(venueEdit.slotId, venue.trim() || null);
-            if (ok) setVenueEdit(null);
+            await setVenue(venueEdit.slotId, venue.trim() || null);
+            setVenueEdit(null);
           }}
         />
       )}
+
+      {renderSlotSheet()}
     </DndContext>
   );
 }
@@ -316,28 +595,33 @@ interface CellHandlers {
   onToggleCancelClass: (cell: GridCell) => void;
   onEditVenue: (cell: GridCell) => void;
   onRemove: (cell: GridCell) => void;
+  onSlotClick: (cell: GridCell) => void;
 }
 
 interface SlotRowGroupProps {
   defIndex: number;
   cells: GridCell[];
   todayDow: number;
-  todayStatusMap: Map<string, LogStatus>;
   openMenu: string | null;
   setOpenMenu: (id: string | null) => void;
   dragActive: boolean;
   handlers: CellHandlers;
+  weekStart: string;
+  cellLogStatus: (cell: GridCell) => LogStatus | null;
+  isHolidayDate: (date: string) => boolean;
 }
 
 function SlotRowGroup({
   defIndex,
   cells,
   todayDow,
-  todayStatusMap,
   openMenu,
   setOpenMenu,
   dragActive,
   handlers,
+  weekStart,
+  cellLogStatus,
+  isHolidayDate,
 }: SlotRowGroupProps) {
   const def = timetableSlots[defIndex];
   const breakBefore = defIndex === 2;
@@ -362,12 +646,14 @@ function SlotRowGroup({
 
       {cells.map((cell) => {
         const menuId = `${cell.dayOfWeek}:${cell.slotIndex}`;
+        const cellDate = dateForDay(weekStart, cell.dayOfWeek);
+        const isHoliday = isHolidayDate(cellDate);
         return (
           <SlotCell
             key={menuId}
             cell={cell}
             isToday={cell.dayOfWeek === todayDow}
-            logStatus={todayStatusMap.get(`${cell.dayOfWeek}:${cell.startTime}`) ?? null}
+            logStatus={cellLogStatus(cell)}
             dragActive={dragActive}
             menuOpen={openMenu === menuId}
             onToggleMenu={() => setOpenMenu(openMenu === menuId ? null : menuId)}
@@ -376,6 +662,8 @@ function SlotRowGroup({
             onToggleCancelClass={() => handlers.onToggleCancelClass(cell)}
             onEditVenue={() => handlers.onEditVenue(cell)}
             onRemove={() => handlers.onRemove(cell)}
+            onSlotClick={() => handlers.onSlotClick(cell)}
+            isHoliday={isHoliday}
           />
         );
       })}
@@ -444,10 +732,13 @@ interface MobileBoardProps {
   paletteCourses: TimetableController['courses'];
   dragActive: boolean;
   todayDow: number;
-  todayStatusMap: Map<string, LogStatus>;
   openMenu: string | null;
   setOpenMenu: (id: string | null) => void;
   handlers: CellHandlers;
+  weekStart: string;
+  cellLogStatus: (cell: GridCell) => LogStatus | null;
+  isHolidayDate: (date: string) => boolean;
+  weekDates: string[];
 }
 
 /** <768px: days stack vertically, palette wraps on top. Drag works across all days. */
@@ -456,10 +747,13 @@ function MobileBoard({
   paletteCourses,
   dragActive,
   todayDow,
-  todayStatusMap,
   openMenu,
   setOpenMenu,
   handlers,
+  weekStart,
+  cellLogStatus,
+  isHolidayDate,
+  weekDates,
 }: MobileBoardProps) {
   return (
     <div className="space-y-3">
@@ -467,17 +761,39 @@ function MobileBoard({
 
       {DAY_SHORT_LABELS.map((label, dayIndex) => {
         const day = dayIndex + 1;
+        const date = weekDates[dayIndex];
         const isToday = day === todayDow;
+        const isHoliday = isHolidayDate(date);
         return (
-          <div key={day} className="rounded-2xl border border-white/10 bg-white/[0.02] p-2">
+          <div key={day} className={`rounded-2xl border p-2 transition-colors
+            ${isHoliday ? 'border-amber-500/20 bg-amber-500/10' : 'border-white/10 bg-white/[0.02]'}`}>
             <div className="flex items-center justify-between px-1 pb-2">
-              <span className={`text-xs font-bold tracking-wide ${isToday ? 'text-indigo-300' : 'text-slate-300'}`}>
-                {label}
-                {isToday && (
-                  <span className="ml-1.5 rounded-full bg-indigo-500/20 px-1.5 py-0.5 text-[9px] font-semibold">Today</span>
-                )}
-              </span>
-              <span className="font-mono text-[10px] text-slate-500">{DAY_LABELS[dayIndex]}</span>
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-bold tracking-wide ${isToday ? 'text-indigo-300' : isHoliday ? 'text-amber-400' : 'text-slate-300'}`}>
+                  {label}
+                  {isToday && (
+                    <span className="ml-1.5 rounded-full bg-indigo-500/20 px-1.5 py-0.5 text-[9px] font-semibold">Today</span>
+                  )}
+                  {isHoliday && (
+                    <span className="ml-1.5 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400">Holiday</span>
+                  )}
+                </span>
+                <span className="font-mono text-[10px] text-slate-500">{formatDayHeader(date)}</span>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handlers.onLog({} as GridCell, 'ATTENDED');
+                }}
+                className={`shrink-0 rounded-xl border px-2 py-0.5 text-[9px] font-semibold transition-all
+                  ${isHoliday
+                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
+                    : 'border-white/10 text-slate-400 hover:bg-white/10 hover:text-white'
+                  }`}
+              >
+                {isHoliday ? 'Undo' : 'Holiday'}
+              </button>
             </div>
 
             <div className="space-y-2">
@@ -487,11 +803,13 @@ function MobileBoard({
                   defIndex={defIndex}
                   cell={slotRow[dayIndex]}
                   isToday={isToday}
-                  todayStatusMap={todayStatusMap}
                   openMenu={openMenu}
                   setOpenMenu={setOpenMenu}
                   dragActive={dragActive}
                   handlers={handlers}
+                  weekStart={weekStart}
+                  cellLogStatus={cellLogStatus}
+                  isHolidayDate={isHolidayDate}
                 />
               ))}
             </div>
@@ -506,25 +824,31 @@ interface MobileSlotRowProps {
   defIndex: number;
   cell: GridCell;
   isToday: boolean;
-  todayStatusMap: Map<string, LogStatus>;
   openMenu: string | null;
   setOpenMenu: (id: string | null) => void;
   dragActive: boolean;
   handlers: CellHandlers;
+  weekStart: string;
+  cellLogStatus: (cell: GridCell) => LogStatus | null;
+  isHolidayDate: (date: string) => boolean;
 }
 
 function MobileSlotRow({
   defIndex,
   cell,
   isToday,
-  todayStatusMap,
   openMenu,
   setOpenMenu,
   dragActive,
   handlers,
+  weekStart,
+  cellLogStatus,
+  isHolidayDate,
 }: MobileSlotRowProps) {
   const def = timetableSlots[defIndex];
   const menuId = `${cell.dayOfWeek}:${cell.slotIndex}`;
+  const cellDate = dateForDay(weekStart, cell.dayOfWeek);
+  const isHoliday = isHolidayDate(cellDate);
 
   return (
     <>
@@ -545,7 +869,7 @@ function MobileSlotRow({
           <SlotCell
             cell={cell}
             isToday={isToday}
-            logStatus={todayStatusMap.get(`${cell.dayOfWeek}:${cell.startTime}`) ?? null}
+            logStatus={cellLogStatus(cell)}
             dragActive={dragActive}
             menuOpen={openMenu === menuId}
             onToggleMenu={() => setOpenMenu(openMenu === menuId ? null : menuId)}
@@ -554,6 +878,8 @@ function MobileSlotRow({
             onToggleCancelClass={() => handlers.onToggleCancelClass(cell)}
             onEditVenue={() => handlers.onEditVenue(cell)}
             onRemove={() => handlers.onRemove(cell)}
+            onSlotClick={() => handlers.onSlotClick(cell)}
+            isHoliday={isHoliday}
           />
         </div>
       </div>

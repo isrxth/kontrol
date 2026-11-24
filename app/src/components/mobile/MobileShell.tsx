@@ -72,7 +72,7 @@ export function MobileShell({
 
   useEffect(() => {
     if (courses.length > 0) {
-      void syncAllNotifications(courses, timetable.slots, activitiesCtrl.activities);
+      void syncAllNotifications(courses, timetable.slots, activitiesCtrl.activities, new Set());
     }
   }, [courses, timetable.slots, activitiesCtrl.activities]);
   const [form, setForm] = useState({ code: '', name: '', totalLectures: '', requiredPercent: '80' });

@@ -7,14 +7,14 @@ interface ModuleChipProps {
   slot: TimetableSlot;
   course: TimetableCourseInfo;
   isCancelled: boolean;
-  isToday: boolean;
   logStatus: LogStatus | null;
+  showLogBadge?: boolean;
   onOpenMenu: () => void;
   menuOpen: boolean;
 }
 
 /** Draggable module card sitting inside a slot cell. */
-export function ModuleChip({ slot, course, isCancelled, isToday, logStatus, onOpenMenu, menuOpen }: ModuleChipProps) {
+export function ModuleChip({ slot, course, isCancelled, logStatus, showLogBadge = false, onOpenMenu, menuOpen }: ModuleChipProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: dragIdForSlot(slot, course),
   });
@@ -45,7 +45,7 @@ export function ModuleChip({ slot, course, isCancelled, isToday, logStatus, onOp
           <MapPin size={10} className="shrink-0" />
           <span className="truncate">{slot.venue ?? 'No venue'}</span>
         </span>
-        {isToday && <LogBadge status={logStatus} />}
+        {showLogBadge && logStatus && <LogBadge status={logStatus} />}
       </div>
 
       <button

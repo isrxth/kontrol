@@ -6,7 +6,7 @@ import {
   type ProjectStatus,
   type ProjectTask,
 } from '@/lib/api';
-import { CACHE_KEYS, getCached } from '@/lib/offline-store';
+import { CACHE_KEYS, getCached, setCached } from '@/lib/offline-store';
 
 export function useProjects() {
   const [projects, setProjects] = useState<Project[]>(
@@ -20,7 +20,9 @@ export function useProjects() {
   const [busy, setBusy] = useState(false);
 
   const refetch = useCallback(async () => {
-    setProjects(await api.getProjects());
+    const data = await api.getProjects();
+    setProjects(data);
+    setCached(CACHE_KEYS.projects, data);
   }, []);
 
   useEffect(() => {
@@ -31,6 +33,7 @@ export function useProjects() {
         const data = await api.getProjects();
         if (!cancelled) {
           setProjects(data);
+          setCached(CACHE_KEYS.projects, data);
           setError(null);
         }
       } catch (err) {
@@ -46,33 +49,67 @@ export function useProjects() {
     };
   }, []);
 
-  const runAction = useCallback(
-    async (action: () => Promise<unknown>) => {
-      setActionError(null);
+  /** Optimistic mutation helper for projects. */
+  const runOptimistic = useCallback(
+    async (mutator: () => void, action: () => Promise<unknown>) => {
+      const prev = [...projects];
       setBusy(true);
+      mutator();
+      setCached(CACHE_KEYS.projects, [...projects]);
       try {
         await action();
-        await refetch();
-        return true;
+        void refetch();
       } catch (err) {
+        setProjects(prev);
+        setCached(CACHE_KEYS.projects, prev);
         setActionError(err instanceof Error ? err.message : 'Action failed');
-        return false;
       } finally {
         setBusy(false);
       }
     },
-    [refetch],
+    [projects, refetch]
   );
 
   const createProject = useCallback(
-    (input: NewProjectInput) => runAction(() => api.createProject(input)),
-    [runAction],
+    (input: NewProjectInput) => {
+      const tempId = `opt_proj_${Date.now()}`;
+      const optimistic: Project = {
+        id: tempId,
+        title: input.title,
+        kind: input.kind ?? 'PERSONAL',
+        courseId: input.courseId ?? null,
+        courseCode: null,
+        status: input.status ?? 'IDEA',
+        description: input.description ?? null,
+        repoUrl: input.repoUrl ?? null,
+        liveUrl: input.liveUrl ?? null,
+        techStack: input.techStack ?? [],
+        position: projects.length,
+        doneTaskCount: 0,
+        totalTaskCount: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      void runOptimistic(
+        () => {
+          setProjects([...projects, optimistic]);
+        },
+        () => api.createProject(input)
+      );
+    },
+    [projects, runOptimistic]
   );
 
   const updateProject = useCallback(
-    (id: string, input: Partial<NewProjectInput>) =>
-      runAction(() => api.updateProject(id, input)),
-    [runAction],
+    (id: string, input: Partial<NewProjectInput>) => {
+      void runOptimistic(
+        () => {
+          setProjects(projects.map((p) => (p.id === id ? { ...p, ...input, techStack: input.techStack ?? p.techStack, updatedAt: new Date().toISOString() } : p)));
+        },
+        () => api.updateProject(id, input)
+      );
+    },
+    [projects, runOptimistic]
   );
 
   /** Sets one project's status and renumbers the whole target column. */
@@ -81,20 +118,43 @@ export function useProjects() {
       const ids = targetOrderedIds.includes(project.id)
         ? targetOrderedIds
         : [...targetOrderedIds, project.id];
-      return runAction(() => api.reorderProjects(targetStatus, ids));
+      void runOptimistic(
+        () => {
+          // Optimistic reorder handled server-side; keep local order stable.
+        },
+        () => api.reorderProjects(targetStatus, ids)
+      );
     },
-    [runAction],
+    [projects, runOptimistic]
   );
 
   const reorderProjects = useCallback(
-    (status: ProjectStatus, orderedIds: string[]) =>
-      runAction(() => api.reorderProjects(status, orderedIds)),
-    [runAction],
+    (status: ProjectStatus, orderedIds: string[]) => {
+      const idSet = new Set(orderedIds);
+      const next = [
+        ...projects.filter((p) => p.status === status && idSet.has(p.id)).sort(
+          (a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id)
+        ),
+        ...projects.filter((p) => p.status !== status || !idSet.has(p.id)),
+      ];
+      void runOptimistic(
+        () => setProjects(next),
+        () => api.reorderProjects(status, orderedIds)
+      );
+    },
+    [projects, runOptimistic]
   );
 
   const deleteProject = useCallback(
-    (id: string) => runAction(() => api.deleteProject(id)),
-    [runAction],
+    (id: string) => {
+      void runOptimistic(
+        () => {
+          setProjects(projects.filter((p) => p.id !== id));
+        },
+        () => api.deleteProject(id)
+      );
+    },
+    [projects, runOptimistic]
   );
 
   /** Full task list lives in the detail panel; cards only show counts from GET /projects. */

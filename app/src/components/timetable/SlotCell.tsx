@@ -18,6 +18,8 @@ interface SlotCellProps {
   onToggleCancelClass: () => void;
   onEditVenue: () => void;
   onRemove: () => void;
+  onSlotClick: () => void;
+  isHoliday: boolean;
 }
 
 export function SlotCell({
@@ -32,6 +34,8 @@ export function SlotCell({
   onToggleCancelClass,
   onEditVenue,
   onRemove,
+  onSlotClick,
+  isHoliday,
 }: SlotCellProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: cellDroppableId(cell.dayOfWeek, cell.slotIndex),
@@ -39,15 +43,19 @@ export function SlotCell({
 
   const dropHighlight = isOver && dragActive;
   const showPlus = dragActive && !cell.slot;
+  const hasLog = Boolean(logStatus);
 
   return (
     <div
       ref={setNodeRef}
-      className={`relative h-24 md:h-28 rounded-2xl border transition-all duration-150 ${
+      onClick={onSlotClick}
+      className={`relative h-24 md:h-28 rounded-2xl border transition-all duration-150 cursor-pointer ${
         dropHighlight
           ? 'border-indigo-400/70 bg-indigo-500/15 ring-1 ring-indigo-400/50'
           : cell.slot
-            ? 'border-white/10 bg-white/[0.03]'
+            ? isHoliday
+              ? 'border-amber-500/20 bg-amber-500/10'
+              : 'border-white/10 bg-white/[0.03]'
             : 'border-dashed border-white/10 bg-white/[0.015] hover:border-white/20'
       }`}
     >
@@ -56,10 +64,10 @@ export function SlotCell({
           slot={cell.cell.slot}
           course={cell.cell.course}
           isCancelled={cell.cell.slot.isCancelled}
-          isToday={isToday}
           logStatus={logStatus}
           onOpenMenu={onToggleMenu}
           menuOpen={menuOpen}
+          showLogBadge={hasLog}
         />
       ) : showPlus ? (
         <div className="flex h-full items-center justify-center text-slate-500">
@@ -71,6 +79,20 @@ export function SlotCell({
         <div className="absolute -top-2 left-2 z-10 flex items-center gap-1 rounded-full border border-indigo-400/40 bg-indigo-500/20 px-2 py-0.5 text-[9px] font-semibold text-indigo-200 backdrop-blur-sm">
           <ArrowLeftRight size={9} />
           ⇄ {DAY_SHORT_LABELS[cell.cell.swappedWith.dayOfWeek - 1]} {cell.cell.swappedWith.startTime}
+        </div>
+      )}
+
+      {hasLog && !cell.cell?.swappedWith && (
+        <div className={`absolute -top-1 right-1 z-20 flex items-center gap-1 px-2 py-0.5 rounded-full border text-[8px] font-semibold backdrop-blur-sm
+          ${logStatus === 'ATTENDED'
+            ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-400'
+            : logStatus === 'SKIPPED'
+            ? 'border-rose-500/30 bg-rose-500/15 text-rose-400'
+            : logStatus === 'GHOST'
+            ? 'border-violet-500/30 bg-violet-500/15 text-violet-400'
+            : 'border-slate-500/30 bg-slate-500/15 text-slate-400'
+          }`}>
+          {logStatus === 'ATTENDED' ? 'Attended' : logStatus === 'SKIPPED' ? 'Skipped' : logStatus === 'GHOST' ? 'Ghost' : 'Holiday'}
         </div>
       )}
 

@@ -101,4 +101,32 @@ router.post('/:id/logs', async (req, res, next) => {
   }
 });
 
+router.delete('/:id/logs', async (req, res, next) => {
+  try {
+    const { logDate, status } = req.body as {
+      logDate?: string;
+      status?: string;
+    };
+
+    if (!logDate || !DATE_PATTERN.test(logDate) || !isValidDateOnly(logDate)) {
+      return res.status(400).json({ error: 'logDate must be a valid YYYY-MM-DD date' });
+    }
+
+    const [course] = await query<CourseRow>('SELECT id FROM courses WHERE id = $1', [req.params.id]);
+    if (!course) return res.status(404).json({ error: 'course not found' });
+
+    const params: unknown[] = [req.params.id, logDate];
+    let sql = `DELETE FROM attendance_logs WHERE course_id = $1 AND log_date = $2`;
+    if (status && STATUSES.includes(status as LogStatus)) {
+      sql += ` AND status = $3`;
+      params.push(status);
+    }
+
+    const result = await query(sql, params);
+    res.json({ deleted: result.length, logDate, status: status ?? 'any' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

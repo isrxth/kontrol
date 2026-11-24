@@ -154,11 +154,14 @@ export function ActivitiesAgenda({ ctrl, courses }: ActivitiesAgendaProps) {
           initial={formTarget === 'new' ? null : formTarget}
           busy={ctrl.busy}
           onClose={() => setFormTarget(null)}
-          onSave={async (input) =>
-            formTarget === 'new'
-              ? ctrl.createActivity(input)
-              : ctrl.updateActivity(formTarget.id, input)
-          }
+          onSave={async (input) => {
+            if (formTarget === 'new') {
+              await ctrl.createActivity(input);
+            } else {
+              await ctrl.updateActivity(formTarget.id, input);
+            }
+            return true;
+          }}
         />
       )}
     </section>

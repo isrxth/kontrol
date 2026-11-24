@@ -305,6 +305,12 @@ export const api = {
       body: JSON.stringify({ status, reason, logDate: options?.logDate ?? todayLocal(), slotTime: options?.slotTime }),
     }),
 
+  deleteLog: (courseId: string, logDate: string, status?: string) =>
+    request<void>(`/courses/${courseId}/logs`, {
+      method: 'DELETE',
+      body: JSON.stringify({ logDate, status }),
+    }),
+
   getTimetable: () => request<TimetableSlot[]>('/timetable'),
 
   placeSlot: (input: { courseId: string; dayOfWeek: number; slotIndex: number; venue?: string | null }) => {

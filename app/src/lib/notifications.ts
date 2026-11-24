@@ -1,6 +1,8 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { api, type CourseStats, type TimetableSlot, type Activity, type LogStatus } from './api';
+import { dayOfWeekOf } from './timetable';
+import { toDateOnly } from './dates';
 
 export const NOTIFICATION_CHANNEL_ID = 'kontrol-alerts';
 export const LECTURE_CHANNEL_ID = 'kontrol-lectures';
@@ -258,11 +260,14 @@ export async function getPendingNotificationsCount(): Promise<number> {
 
 /**
  * Synchronizes weekly timetable reminders and vault activity deadlines.
+ * Skips lecture reminders on any date explicitly marked as a Holiday
+ * (CANCELLED across that day's slots).
  */
 export async function syncAllNotifications(
   courses: CourseStats[],
   slots: TimetableSlot[],
-  activities: Activity[]
+  activities: Activity[],
+  holidayDates: Set<string> = new Set(),
 ): Promise<void> {
   if (!isNative || !areNotificationsEnabled()) return;
 
@@ -304,7 +309,23 @@ export async function syncAllNotifications(
       coursesMap.set(c.id, c);
     }
 
+    /** Compute the date (YYYY-MM-DD) of the next `count` occurrences of `dayOfWeek` starting from today. */
+    function upcomingOccurrences(dayOfWeek: number, count: number): string[] {
+      const result: string[] = [];
+      const d = new Date();
+      const currentDow = dayOfWeekOf(d);
+      let daysToAdd = dayOfWeek - currentDow;
+      if (daysToAdd <= 0) daysToAdd += 7;
+      for (let i = 0; i < count; i++) {
+        const occ = new Date(d);
+        occ.setDate(d.getDate() + i * 7);
+        result.push(toDateOnly(occ));
+      }
+      return result;
+    }
+
     // 1. Weekly lecture notifications (15 minutes prior) with interactive action buttons
+    // Schedule individual notifications for the next 4 weeks, skipping holidays.
     let notifIdCounter = 1000;
     for (const slot of slots) {
       if (slot.isCancelled) continue;
@@ -314,46 +335,35 @@ export async function syncAllNotifications(
       const [h, m] = slot.startTime.split(':').map(Number);
       if (Number.isNaN(h) || Number.isNaN(m)) continue;
 
-      let totalMinutes = h * 60 + m - 15;
-      let weekdayOffset = 0;
-      if (totalMinutes < 0) {
-        totalMinutes += 24 * 60;
-        weekdayOffset = -1;
-      }
+      const dates = upcomingOccurrences(slot.dayOfWeek, 4);
+      for (const date of dates) {
+        if (holidayDates.has(date)) continue;
 
-      const schedHour = Math.floor(totalMinutes / 60);
-      const schedMinute = totalMinutes % 60;
+        const [hy, hm, hd] = date.split('-').map(Number);
+        const schedDate = new Date(hy, hm - 1, hd, h, m, 0, 0);
+        schedDate.setMinutes(schedDate.getMinutes() - 15);
+        if (schedDate.getTime() <= Date.now() + 5000) continue;
 
-      // Map Kontrol dayOfWeek (1=Mon..7=Sun) to Capacitor weekday (1=Sun, 2=Mon..7=Sat)
-      let targetDow = slot.dayOfWeek + weekdayOffset;
-      if (targetDow < 1) targetDow = 7;
-      if (targetDow > 7) targetDow = 1;
-      const capacitorWeekday = (targetDow % 7) + 1;
+        const skips = Math.max(0, course.remainingSkips);
+        const skipWarning =
+          skips === 0
+            ? '⚠️ 0 safe skips left (Attendance at Risk!)'
+            : `${skips} safe ${skips === 1 ? 'skip' : 'skips'} remaining`;
 
-      const skips = Math.max(0, course.remainingSkips);
-      const skipWarning =
-        skips === 0
-          ? '⚠️ 0 safe skips left (Attendance at Risk!)'
-          : `${skips} safe ${skips === 1 ? 'skip' : 'skips'} remaining`;
-
-      notifications.push({
-        id: notifIdCounter++,
-        title: `📚 ${course.code} in 15m`,
-        body: `${course.name} at ${slot.startTime}${slot.venue ? ` • ${slot.venue}` : ''} (${skipWarning})`,
-        channelId: LECTURE_CHANNEL_ID,
-        actionTypeId: LECTURE_ACTION_TYPE_ID,
-        extra: { courseId: course.id },
-        schedule: {
-          on: {
-            weekday: capacitorWeekday,
-            hour: schedHour,
-            minute: schedMinute,
+        notifications.push({
+          id: notifIdCounter++,
+          title: `📚 ${course.code} in 15m`,
+          body: `${course.name} at ${slot.startTime}${slot.venue ? ` • ${slot.venue}` : ''} (${skipWarning})`,
+          channelId: LECTURE_CHANNEL_ID,
+          actionTypeId: LECTURE_ACTION_TYPE_ID,
+          extra: { courseId: course.id },
+          schedule: {
+            at: schedDate,
+            allowWhileIdle,
           },
-          repeats: true,
-          allowWhileIdle,
-        },
-        sound: 'default',
-      });
+          sound: 'default',
+        });
+      }
     }
 
     // 2. Build Vault Activity Deadline Notifications (24h, 1h, and at start)

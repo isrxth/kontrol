@@ -1,4 +1,5 @@
 import { timetableSlots, type TimetableCourseInfo, type TimetableSlot, type TimetableSwap } from './api';
+import { parseDateOnly } from './dates';
 
 export const DAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as const;
 export const DAY_SHORT_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
@@ -151,4 +152,45 @@ export function unplacedCourses<T extends { id: string }>(courses: T[], slots: T
     placed.add(cell.course.id);
   }
   return courses.filter((c) => !placed.has(c.id));
+}
+
+/** Monday (YYYY-MM-DD) of the week `offset` weeks from `date`'s week. */
+export function weekStartOf(date: Date, offset: number): string {
+  const base = mondayOf(date);
+  const d = parseDateOnly(base);
+  if (!d) return base;
+  d.setDate(d.getDate() + offset * 7);
+  return toDateOnly(d);
+}
+
+/** Calendar date (YYYY-MM-DD) for a given ISO dayOfWeek (1=Mon..5=Fri) within a week starting on `weekStart`. */
+export function dateForDay(weekStart: string, dayOfWeek: number): string {
+  const d = parseDateOnly(weekStart);
+  if (!d) return weekStart;
+  d.setDate(d.getDate() + (dayOfWeek - 1));
+  return toDateOnly(d);
+}
+
+/** Format a 'YYYY-MM-DD' as 'Mon 23' for day column headers. */
+export function formatDayHeader(value: string): string {
+  const d = parseDateOnly(value);
+  if (!d) return value;
+  return d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
+}
+
+/** Format a week range as 'Nov 23 – Nov 27'. */
+export function formatWeekRange(startDate: string, endDate: string): string {
+  const start = parseDateOnly(startDate);
+  const end = parseDateOnly(endDate);
+  if (!start || !end) return `${startDate} – ${endDate}`;
+  const sameMonth = start.getMonth() === end.getMonth();
+  const fmt = (date: Date) => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return sameMonth ? `${fmt(start)} – ${fmt(end)}` : `${fmt(start)} – ${fmt(end)}`;
+}
+
+/** Format a 'YYYY-MM-DD' as 'Monday, Nov 23' for action sheet headers. */
+export function formatDayFull(value: string): string {
+  const d = parseDateOnly(value);
+  if (!d) return value;
+  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
 }
