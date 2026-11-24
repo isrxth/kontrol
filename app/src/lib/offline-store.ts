@@ -8,6 +8,8 @@ export const CACHE_KEYS = {
   today: 'kontrol_cache_today',
   projects: 'kontrol_cache_projects',
   activities: 'kontrol_cache_activities',
+  holidays: 'kontrol_cache_holidays',
+  weekOffset: 'kontrol_cache_week_offset',
 } as const;
 
 export const OUTBOX_KEY = 'kontrol_offline_outbox';

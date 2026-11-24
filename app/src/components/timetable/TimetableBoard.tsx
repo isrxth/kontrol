@@ -31,6 +31,7 @@ import {
   formatWeekRange,
   formatDayFull,
 } from '@/lib/timetable';
+import { CACHE_KEYS, getCached, setCached } from '@/lib/offline-store';
 import { hapticAction, hapticWarning } from '@/lib/haptics';
 import type { TimetableController } from '@/hooks/useTimetable';
 import { ModulePalette } from './ModulePalette';
@@ -72,9 +73,11 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
   const [venueEdit, setVenueEdit] = useState<{ slotId: string; code: string; venue: string } | null>(null);
 
   // ── Week offset state ──────────────────────────────────────────────
-  const [weekOffset, setWeekOffset] = useState(0);
+  const savedWeekOffset = typeof window !== 'undefined' ? getCached<number>(CACHE_KEYS.weekOffset) ?? 0 : 0;
+  const [weekOffset, setWeekOffset] = useState(savedWeekOffset);
   const [weekLogs, setWeekLogs] = useState<Map<string, LogStatus>>(new Map());
-  const [holidayDates, setHolidayDates] = useState<Set<string>>(new Set());
+  const savedHolidays = typeof window !== 'undefined' ? getCached<string[]>(CACHE_KEYS.holidays) ?? [] : [];
+  const [holidayDates, setHolidayDates] = useState<Set<string>>(new Set(savedHolidays));
   const [openSheet, setOpenSheet] = useState<{ cell: GridCell; date: string } | null>(null);
 
   const todayDow = dayOfWeekOf(new Date());
@@ -97,7 +100,7 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
     const run = async () => {
       try {
         const logMap = new Map<string, LogStatus>();
-        const holidaySet = new Set<string>();
+        const holidaySet = new Set<string>(savedHolidays);
 
         for (const course of courses) {
           try {
@@ -126,7 +129,16 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
 
     void run();
     return () => { cancelled = true; };
-  }, [courses, startDate, endDate]);
+  }, [courses, startDate, endDate, savedHolidays]);
+
+  // ── Persist holiday state locally so it survives tab switches ───────
+  useEffect(() => {
+    setCached(CACHE_KEYS.holidays, Array.from(holidayDates));
+  }, [holidayDates]);
+
+  useEffect(() => {
+    setCached(CACHE_KEYS.weekOffset, weekOffset);
+  }, [weekOffset]);
 
   // ── Derive per-cell log status from week logs ───────────────────────
   const cellLogStatus = useCallback((cell: GridCell): LogStatus | null => {
@@ -556,6 +568,8 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
             cellLogStatus={cellLogStatus}
             isHolidayDate={isHolidayDate}
             weekDates={weekDates}
+            onMarkHoliday={markHoliday}
+            onUndoHoliday={undoHoliday}
           />
         )}
       </div>
@@ -739,6 +753,8 @@ interface MobileBoardProps {
   cellLogStatus: (cell: GridCell) => LogStatus | null;
   isHolidayDate: (date: string) => boolean;
   weekDates: string[];
+  onMarkHoliday: (dayOfWeek: number, date: string) => void;
+  onUndoHoliday: (date: string) => void;
 }
 
 /** <768px: days stack vertically, palette wraps on top. Drag works across all days. */
@@ -754,6 +770,8 @@ function MobileBoard({
   cellLogStatus,
   isHolidayDate,
   weekDates,
+  onMarkHoliday,
+  onUndoHoliday,
 }: MobileBoardProps) {
   return (
     <div className="space-y-3">
@@ -784,7 +802,11 @@ function MobileBoard({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  void handlers.onLog({} as GridCell, 'ATTENDED');
+                  if (isHoliday) {
+                    void onUndoHoliday(date);
+                  } else {
+                    void onMarkHoliday(day, date);
+                  }
                 }}
                 className={`shrink-0 rounded-xl border px-2 py-0.5 text-[9px] font-semibold transition-all
                   ${isHoliday
