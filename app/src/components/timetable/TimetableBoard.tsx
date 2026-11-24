@@ -280,21 +280,32 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
     const daySlots = slots.filter((s) => s.dayOfWeek === dayOfWeek && !s.isCancelled);
     if (daySlots.length === 0) return;
 
+    const prevWeekLogs = new Map(weekLogs);
+    const prevHolidayDates = new Set(holidayDates);
+
     // Optimistically add holiday logs
-    const newLogs: Array<{ courseId: string; date: string; status: LogStatus }> = [];
     for (const slot of daySlots) {
-      newLogs.push({ courseId: slot.courseId, date, status: 'CANCELLED' });
       const key = `${slot.courseId}|${date}|${slot.startTime}`;
       weekLogs.set(key, 'CANCELLED');
     }
     setWeekLogs(new Map(weekLogs));
     setHolidayDates(new Set([...holidayDates, date]));
 
-    // Fire all API calls in background
-    await Promise.all(daySlots.map((slot) =>
-      api.logAttendance(slot.courseId, 'CANCELLED', undefined, { logDate: date, slotTime: slot.startTime }).catch(() => undefined)
-    ));
-    void hapticAction();
+    let serverError = false;
+    await Promise.all(daySlots.map(async (slot) => {
+      try {
+        await api.logAttendance(slot.courseId, 'CANCELLED', undefined, { logDate: date, slotTime: slot.startTime });
+      } catch {
+        serverError = true;
+      }
+    }));
+
+    if (serverError) {
+      setWeekLogs(prevWeekLogs);
+      setHolidayDates(prevHolidayDates);
+    } else {
+      void hapticAction();
+    }
   }, [slots, weekLogs, holidayDates]);
 
   const undoHoliday = useCallback(async (date: string) => {
@@ -302,6 +313,9 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
       const cellDate = dateForDay(weekStart, s.dayOfWeek);
       return cellDate === date && !s.isCancelled;
     });
+
+    const prevWeekLogs = new Map(weekLogs);
+    const prevHolidayDates = new Set(holidayDates);
 
     // Optimistically remove
     for (const slot of daySlots) {
@@ -311,10 +325,21 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
     setWeekLogs(new Map(weekLogs));
     setHolidayDates(new Set([...holidayDates].filter((d) => d !== date)));
 
-    await Promise.all(daySlots.map((slot) =>
-      api.deleteLog(slot.courseId, date, 'CANCELLED').catch(() => undefined)
-    ));
-    void hapticAction();
+    let serverError = false;
+    await Promise.all(daySlots.map(async (slot) => {
+      try {
+        await api.deleteLog(slot.courseId, date, 'CANCELLED');
+      } catch {
+        serverError = true;
+      }
+    }));
+
+    if (serverError) {
+      setWeekLogs(prevWeekLogs);
+      setHolidayDates(prevHolidayDates);
+    } else {
+      void hapticAction();
+    }
   }, [slots, weekStart, holidayDates, dateForDay]);
 
   // ── Slot action sheet ───────────────────────────────────────────────
@@ -419,14 +444,20 @@ export function TimetableBoard({ timetable }: TimetableBoardProps) {
   };
 
   // Clear Log handler: treat as deleting the log for that cell/date
-  const handleClearLog = useCallback((cell: GridCell) => {
+  const handleClearLog = useCallback(async (cell: GridCell) => {
     if (!cell.cell) return;
     const cellDate = dateForDay(weekStart, cell.dayOfWeek);
-    void api.deleteLog(cell.cell.course.id, cellDate, 'CANCELLED').catch(() => undefined);
+    const prevWeekLogs = new Map(weekLogs);
     const key = `${cell.cell.course.id}|${cellDate}|${cell.startTime}`;
     weekLogs.delete(key);
     setWeekLogs(new Map(weekLogs));
-    void hapticAction();
+
+    try {
+      await api.deleteLog(cell.cell.course.id, cellDate, 'CANCELLED');
+      void hapticAction();
+    } catch {
+      setWeekLogs(prevWeekLogs);
+    }
   }, [weekLogs, weekStart]);
 
   // Wrap onLog to handle CLEAR
